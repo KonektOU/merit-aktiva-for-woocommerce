@@ -206,8 +206,12 @@ class API extends Framework\SV_WC_API_Base {
 			$x   = (int) ( substr( $stamp, strlen( $stamp ) - 1 - $i, 1 ) );
 			$sum = $sum + ( $x * $chcs[ $pos ] );
 
-			if ( $pos == 2 ) $pos = 0;
-			else $pos = $pos + 1;
+			if ( $pos == 2 ) {
+				$pos = 0;
+
+			} else {
+				$pos = $pos + 1;
+			}
 		}
 
 		$x   = 10 - ( $sum % 10 );

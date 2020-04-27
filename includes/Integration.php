@@ -82,7 +82,7 @@ class Integration extends \WC_Integration {
 			],
 
 			'invoice_sync_status' => [
-				'title'       => __( 'Order status' ),
+				'title'       => __( 'Order status', 'konekt-merit-aktiva' ),
 				'type'        => 'select',
 				'default'     => 'processing',
 				'options'     => [
@@ -93,7 +93,7 @@ class Integration extends \WC_Integration {
 			],
 
 			'invoice_item_type' => [
-				'title'       => __( 'Invoice item type' ),
+				'title'       => __( 'Invoice item type', 'konekt-merit-aktiva' ),
 				'type'        => 'select',
 				'default'     => '1',
 				'options'     => [
@@ -104,7 +104,7 @@ class Integration extends \WC_Integration {
 			],
 
 			'invoice_shipping_sku' => [
-				'title'       => __( 'Shipping SKU' ),
+				'title'       => __( 'Shipping SKU', 'konekt-merit-aktiva' ),
 				'type'        => 'text',
 				'default'     => '',
 			],
