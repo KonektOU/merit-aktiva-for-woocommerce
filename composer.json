@@ -1,0 +1,21 @@
+{
+    "name": "konekt/merit-aktiva-for-woocommerce",
+    "description": "Integration with Merit Aktiva and WooCommerce for automatic data exchange.",
+    "type": "wordpress-plugin",
+    "authors": [
+        {
+            "name": "Konekt OÜ",
+            "email": "info@konekt.ee"
+        }
+    ],
+    "minimum-stability": "dev",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/skyverge/wc-plugin-framework"
+        }
+    ],
+    "require" : {
+        "skyverge/wc-plugin-framework": "5.6.1"
+    }
+}
