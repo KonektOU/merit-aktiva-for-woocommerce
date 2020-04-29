@@ -163,9 +163,9 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		if ( 200 === $response->get_response_code() ) {
+		if ( 200 === $this->get_response_code() ) {
 			// Save order and customer IDs from response
-			$this->get_plugin()->add_order_meta( [
+			$this->get_plugin()->add_order_meta( $order, [
 				'invoice_id'  => $response->InvoiceId,
 				'customer_id' => $response->CustomerId,
 			] );
