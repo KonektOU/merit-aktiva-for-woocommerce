@@ -1,7 +1,8 @@
 <?php
 /**
- * Merit Aktiva for WooCommerce
+ * API Request
  *
+ * @package Merit Aktiva for WooCommerce
  * @author Konekt
  */
 
@@ -20,6 +21,16 @@ defined( 'ABSPATH' ) or exit;
 class Request extends Framework\SV_WC_API_JSON_Request {
 
 
+	/**
+	 * Construct API request
+	 *
+	 * @param string $api_id
+	 * @param string $api_key
+	 * @param string $method
+	 * @param string $path
+	 * @param array $data
+	 * @param array $params
+	 */
 	public function __construct( $api_id, $api_key, $method, $path, $data = [], $params = [] ) {
 
 		$this->api_id  = $api_id;

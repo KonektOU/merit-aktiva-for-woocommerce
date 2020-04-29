@@ -1,7 +1,8 @@
 <?php
 /**
- * Merit Aktiva for WooCommerce
+ * API functionality
  *
+ * @package Merit Aktiva for WooCommerce
  * @author Konekt
  */
 
@@ -13,6 +14,12 @@ defined( 'ABSPATH' ) or exit;
 
 class API extends Framework\SV_WC_API_Base {
 
+
+	/**
+	 * API URL based on language
+	 *
+	 * @var array
+	 */
 	private $api_urls = [
 		'estonian' => 'https://aktiva.merit.ee/api/v1/',
 		'finnish'  => 'https://aktiva.meritaktiva.fi/api/v1/',
@@ -48,10 +55,11 @@ class API extends Framework\SV_WC_API_Base {
 	 *
 	 * @param \WC_Order $order
 	 *
-	 * @return void
+	 * @return bool
 	 */
 	public function create_invoice( $order ) {
 
+		// Support for "Estonian Banklinks for WooCommerce"
 		$reference_number = $order->get_meta( '_wc_estonian_banklinks_reference_number', true );
 
 		if ( ! $reference_number ) {
@@ -83,6 +91,7 @@ class API extends Framework\SV_WC_API_Base {
 			];
 		}
 
+		// Add shipping method
 		if ( $order->get_shipping_method() ) {
 			$order_items[] = [
 				'Item' => [
@@ -101,6 +110,7 @@ class API extends Framework\SV_WC_API_Base {
 		// Remove name and company before generate the Google Maps URL.
 		unset( $customer_address['first_name'], $customer_address['last_name'], $customer_address['company'] );
 
+		// Prepare invoice data
 		$invoice = [
 			// Customer data
 			'Customer' => [
@@ -177,10 +187,16 @@ class API extends Framework\SV_WC_API_Base {
 		} else {
 			// Request failed
 		}
-		wp_var_log( $response );
+
+		return 200 === $this->get_response_code();
 	}
 
 
+	/**
+	 * Get available taxes
+	 *
+	 * @return void
+	 */
 	public function get_taxes() {
 		$request = $this->perform_request(
 			$this->get_new_request( [
@@ -192,11 +208,25 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	/**
+	 * Format number
+	 *
+	 * @param float $number
+	 *
+	 * @return string
+	 */
 	private function format_number( $number ) {
 		return Framework\SV_WC_Helper::number_format( $number );
 	}
 
 
+	/**
+	 * Generate reference number
+	 *
+	 * @param string $stamp
+	 *
+	 * @return string
+	 */
 	private function generate_reference_number( $stamp ) {
 		$chcs = array( 7, 3, 1 );
 		$sum  = 0;
@@ -221,6 +251,13 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	/**
+	 * Construct new API request
+	 *
+	 * @param array $args
+	 *
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\API\Request
+	 */
 	protected function get_new_request( $args = [] ) {
 		$args = wp_parse_args( $args, [
 			'path'   => '',

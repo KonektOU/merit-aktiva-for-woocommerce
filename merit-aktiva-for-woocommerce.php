@@ -9,8 +9,8 @@
  * Text Domain: konekt-merit-aktiva
  * Domain Path: /i18n/languages/
  *
- * @package   Merit Aktiva for WooCommerce
- * @author    Konekt
+ * @package Merit Aktiva for WooCommerce
+ * @author  Konekt
  */
 
 defined( 'ABSPATH' ) or exit;
@@ -39,7 +39,7 @@ class Konekt_WC_Merit_Aktiva {
 	const PLUGIN_NAME = 'Merit Aktiva for WooCommerce';
 
 
-	/** @var Konekt_WC_Merit_Aktiva single instance of this class // TODO: replace with loader class name */
+	/** @var Konekt_WC_Merit_Aktiva single instance of this class */
 	private static $instance;
 
 	/** @var array the admin notices to add */

@@ -1,7 +1,8 @@
 <?php
 /**
- * Merit Aktiva for WooCommerce
+ * Integration
  *
+ * @package Merit Aktiva for WooCommerce
  * @author Konekt
  */
 
@@ -11,10 +12,14 @@ defined( 'ABSPATH' ) or exit;
 
 class Integration extends \WC_Integration {
 
+
 	/** @var Konekt\WooCommerce\Merit_Aktiva\API API handler instance */
 	protected $api;
 
 
+	/**
+	 * Integration constructor
+	 */
 	public function __construct() {
 
 		$this->id                 = 'merit_aktiva';
@@ -29,12 +34,17 @@ class Integration extends \WC_Integration {
 
 		if ( $this->have_api_credentials() ) {
 			if ( 'yes' === $this->get_option( 'invoice_sync_allowed', 'no' ) ) {
-				add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 10, 4 );
+				add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
 			}
 		}
 	}
 
 
+	/**
+	 * Set integration settings fields
+	 *
+	 * @return void
+	 */
 	public function init_form_fields() {
 
 		$this->form_fields = [
@@ -123,6 +133,11 @@ class Integration extends \WC_Integration {
 	}
 
 
+	/**
+	 * Get taxes
+	 *
+	 * @return void
+	 */
 	public function get_taxes() {
 		if ( false === ( $taxes = get_transient( 'wc_' . wc_konekt_woocommerce_merit_aktiva()->get_id() . '_taxes' ) ) ) {
 			$taxes = $this->get_api()->get_taxes();
@@ -138,6 +153,16 @@ class Integration extends \WC_Integration {
 	}
 
 
+	/**
+	 * Create invoice (if order status is okay)
+	 *
+	 * @param itneger $order_id
+	 * @param string $order_old_status
+	 * @param string $order_new_status
+	 * @param \WC_Order $order
+	 *
+	 * @return void
+	 */
 	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status, $order ) {
 
 		if ( $order_new_status !== $this->get_option( 'invoice_sync_status', 'processing' ) ) {
@@ -165,6 +190,11 @@ class Integration extends \WC_Integration {
 	}
 
 
+	/**
+	 * Checks if API ID and key have been set
+	 *
+	 * @return bool
+	 */
 	private function have_api_credentials() {
 
 		return $this->get_option( 'api_id' ) && $this->get_option( 'api_key' );

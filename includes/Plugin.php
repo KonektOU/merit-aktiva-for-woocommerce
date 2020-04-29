@@ -1,7 +1,8 @@
 <?php
 /**
- * Merit Aktiva for WooCommerce
+ * Plugin base class
  *
+ * @package Merit Aktiva for WooCommerce
  * @author Konekt
  */
 
@@ -63,6 +64,13 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	/**
+	 * Loads integration
+	 *
+	 * @param array $integrations
+	 *
+	 * @return array
+	 */
 	public function load_integration( $integrations = [] ) {
 
 		if ( ! class_exists( self::INTEGRATION_CLASS ) ) {
@@ -172,6 +180,11 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	/**
+	 * Get documentation URL
+	 *
+	 * @return void
+	 */
 	public function get_documentation_url() {
 
 		return 'https://konekt.ee/woocommerce/merit-aktiva';
@@ -179,7 +192,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 
 	/**
-	 * Gets the plugin full name including "WooCommerce", ie "WooCommerce X".
+	 * Gets the plugin full name including "WooCommerce"
 	 *
 	 * @since 1.0.0
 	 *

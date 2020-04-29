@@ -1,7 +1,8 @@
 <?php
 /**
- * Merit Aktiva for WooCommerce
+ * API Response
  *
+ * @package Merit Aktiva for WooCommerce
  * @author Konekt
  */
 
@@ -18,4 +19,5 @@ defined( 'ABSPATH' ) or exit;
  * @since 1.0.0
  */
 class Response extends Framework\SV_WC_API_JSON_Response {
+    //
 }
