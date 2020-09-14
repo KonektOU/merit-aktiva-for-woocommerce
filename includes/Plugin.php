@@ -72,6 +72,9 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		// Add custom data store
 		add_filter( 'woocommerce_data_stores', array( $this, 'load_product_data_store' ) );
+
+		// Custom hook
+		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 1 );
 	}
 
 
@@ -150,6 +153,41 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 */
 	public function get_order_meta_key( $meta_key ) {
 		return '_wc_' . $this->get_id() . '_' . $meta_key;
+	}
+
+
+	/**
+	 * Add product meta
+	 *
+	 * @param \WC_Product $product
+	 * @param string|array $meta
+	 * @param string $value
+	 *
+	 * @return void
+	 */
+	public function add_product_meta( \WC_Product $product, $meta, $value = null ) {
+
+		if ( is_array( $meta ) ) {
+			foreach ( $meta as $key => $value ) {
+				$product->update_meta_data( $this->get_order_meta_key( $key ), $value );
+			}
+
+		} else {
+			$product->update_meta_data( $this->get_order_meta_key( $meta ), $value );
+		}
+
+		$product->save_meta_data();
+	}
+
+
+	public function get_product_meta( \WC_Product $product, $meta_key ) {
+
+		return $product->get_meta( $this->get_order_meta_key( $meta_key ), true );
+	}
+
+
+	public function attach_product_quantities_by_warehouse( $product ) {
+		return $this->get_product_meta( $product, 'quantities_by_warehouse' );
 	}
 
 

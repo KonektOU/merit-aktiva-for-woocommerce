@@ -37,34 +37,70 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 	 * @return void
 	 */
 	private function refetch_product_stock( &$product ) {
-		$stock_cache_key = $this->get_stock_cache_key( $product->get_sku() );
+		$warehouses = $this->get_integration()->get_warehouses();
+		$quantities = [];
 
-		if ( false === ( $cached = $this->get_plugin()->get_cache( $stock_cache_key ) ) ) {
-			$item_stock = $this->get_api()->get_item_stock( $product->get_sku() );
+		foreach ( $warehouses as $warehouse_id ) {
 
-			if ( $item_stock ) {
-				$new_stock_count = wc_stock_amount( $item_stock->Instock );
+			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse_id );
 
-				if ( $new_stock_count != $product->get_stock_quantity() ) {
-					$this->update_product_stock( $product->get_id(), $new_stock_count, 'set' );
+			if ( false === ( $cached = $this->get_plugin()->get_cache( $stock_cache_key ) ) ) {
+				$item_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse_id );
+
+				if ( empty( $item_stock ) ) {
+					continue;
 				}
 
-				if ( ! $product->managing_stock() ) {
-					$product->set_manage_stock( true );
-					$product->set_stock_status( $new_stock_count > 0 ? 'instock' : 'outofstock' );
+				if ( 'Laokaup' !== $item_stock->Type ) {
+					$quantities = null;
+
+					$product->set_manage_stock( false );
+
+					break;
 				}
 
-				if ( $new_stock_count > 0 && 'instock' !== $product->get_stock_status() ) {
-					$product->set_stock_status( 'instock' );
+				$product->set_manage_stock( true );
+
+				if ( $item_stock->InventoryQty ) {
+					$quantities[] = [
+						'location' => $warehouse_id,
+						'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
+					];
 				}
 
-				if ( ! empty( $product->get_changes() ) ) {
-					$product->save();
-				}
+				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
+			}
+		}
 
+		if ( null !== $quantities && $product->managing_stock() ) {
+			$total_quantity = 0;
+
+			foreach ( $quantities as $quantity ) {
+				$total_quantity += $quantity['quantity'];
 			}
 
-			$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
+			// Save quantities to meta
+			$this->get_plugin()->add_product_meta(
+				$product,
+				[
+					'quantities_by_warehouse' => $quantities
+				]
+			);
+
+			$new_stock_count = wc_stock_amount( $total_quantity );
+
+			if ( $new_stock_count != $product->get_stock_quantity() ) {
+				$this->update_product_stock( $product->get_id(), $new_stock_count, 'set' );
+			}
+
+			if ( $new_stock_count > 0 && 'instock' !== $product->get_stock_status() ) {
+				$product->set_stock_status( 'instock' );
+			}
+
+		}
+
+		if ( ! empty( $product->get_changes() ) ) {
+			$product->save();
 		}
 	}
 
@@ -84,38 +120,16 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 			$item = $this->get_api()->get_item( $product->get_sku() );
 
 			if ( $item ) {
-				if ( $item->VATCode ) {
-					$available_taxes = $this->get_integration()->get_option( 'taxes', [] );
-
-					if ( array_key_exists( $item->VATCode, $available_taxes ) ) {
-						$woocommerce_tax_id    = (int) $available_taxes[ $item->VATCode ];
-						$woocommerce_tax_class = '';
-
-						foreach ( $this->get_integration()->get_all_tax_rates() as $tax_id => $tax ) {
-							if ( (int) $tax_id === $woocommerce_tax_id ) {
-								$woocommerce_tax_class = $tax['slug'];
-
-								break;
-							}
-						}
-
-						if ( ! empty( $woocommerce_tax_class ) ) {
-							if ( $woocommerce_tax_class !== $product->get_tax_class() ) {
-								$product->set_tax_class( $woocommerce_tax_class );
-								$product->save();
-							}
-						}
-					}
-				}
+				// Update data
 			}
 
-			//$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
+			$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
 		}
 	}
 
 
-	public function get_stock_cache_key( $product_sku ) {
-		return 'item_stock_' . $product_sku;
+	public function get_stock_cache_key( $product_sku, $warehouse_id ) {
+		return 'item_stock_' . $product_sku . '@' . $warehouse_id;
 	}
 
 

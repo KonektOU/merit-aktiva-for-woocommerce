@@ -229,6 +229,20 @@ class Integration extends \WC_Integration {
 	}
 
 
+	public function get_warehouses() {
+
+		$warehouse_ids = explode( "\n", $this->get_option( 'warehouses', [] ) );
+
+		if ( ! empty( $warehouse_ids ) ) {
+			$warehouse_ids = array_map( 'trim', $warehouse_ids );
+
+			return $warehouse_ids;
+		}
+
+		return [0];
+	}
+
+
 	/**
 	 * Gets the API handler instance.
 	 *

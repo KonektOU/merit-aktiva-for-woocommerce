@@ -53,6 +53,8 @@ class API extends Framework\SV_WC_API_Base {
 		$this->set_request_accept_header( 'application/json' );
 
 		$this->response_handler = API\Response::class;
+
+		add_action('requests-requests.before_request', array($this, 'maybe_set_data_format_to_body'), 10, 5);
 	}
 
 
@@ -249,17 +251,28 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
-	public function get_item( $product_sku ) {
+	public function get_item( $product_sku, $warehouse_id = null ) {
+		$request_data = [
+			'Code' => $product_sku,
+		];
+
+		if ( null !== $warehouse_id ) {
+			$request_data['LocationCode'] = $warehouse_id;
+		}
+
 		$request = $this->perform_request(
 			$this->get_new_request( [
 				'path' => 'getitems',
-				'data' => [
-					'Code' => $product_sku,
-				],
+				'data' => $request_data,
 			] )
 		);
 
-		return $request;
+		return empty( $request ) ? null : reset( $request->response_data );
+	}
+
+
+	public function get_item_stock( $product_sku, $warehouse_id ) {
+		return $this->get_item( $product_sku, $warehouse_id );
 	}
 
 
@@ -345,6 +358,13 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	public function maybe_set_data_format_to_body( &$url, &$headers, &$data, &$type, &$options ) {
+		if ( stristr( $url, $this->get_request_uri() ) ) {
+			$options['data_format'] = 'body';
+		}
+	}
+
+
 	/**
 	 * Gets the request body.
 	 *
@@ -359,13 +379,6 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		return ( $this->get_request() && $this->get_request()->to_string() ) ? $this->get_request()->to_string() : '';
-	}
-
-
-	protected function get_request_args() {
-		$args = parent::get_request_args();
-
-		return $args;
 	}
 
 
