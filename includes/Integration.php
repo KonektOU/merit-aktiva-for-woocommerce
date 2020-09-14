@@ -36,6 +36,10 @@ class Integration extends \WC_Integration {
 			if ( 'yes' === $this->get_option( 'invoice_sync_allowed', 'no' ) ) {
 				add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
 			}
+
+			// Add "Submit again to Merit Aktiva".
+			add_filter( 'woocommerce_order_actions', array( $this, 'add_order_view_action' ), 90, 1 );
+			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
 		}
 	}
 
@@ -118,6 +122,19 @@ class Integration extends \WC_Integration {
 				'type'        => 'text',
 				'default'     => '',
 			],
+
+			'primary_warehouse_id' => [
+				'title'       => __( 'Primary warehouse ID', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'default'     => '',
+			],
+
+			'warehouses' => [
+				'title'       => __( 'Warehouses', 'konekt-merit-aktiva' ),
+				'type'        => 'textarea',
+				'default'     => '',
+				'description' => __( 'Warehouses IDs that will be used, each warehouse ID on new line.', 'konekt-merit-aktiva' ),
+			],
 		];
 
 		if ( $this->have_api_credentials() ) {
@@ -139,14 +156,14 @@ class Integration extends \WC_Integration {
 	 * @return void
 	 */
 	public function get_taxes() {
-		if ( false === ( $taxes = get_transient( 'wc_' . wc_konekt_woocommerce_merit_aktiva()->get_id() . '_taxes' ) ) ) {
+		if ( false === ( $taxes = get_transient( 'wc_' . $this->get_plugin()->get_id() . '_taxes' ) ) ) {
 			$taxes = $this->get_api()->get_taxes();
 
 			if ( ! empty( $taxes ) ) {
 				$taxes = array_column( (array) $taxes, 'Code', 'Id' );
 			}
 
-			set_transient( 'wc_' . wc_konekt_woocommerce_merit_aktiva()->get_id() . '_taxes', $taxes );
+			set_transient( 'wc_' . $this->get_plugin()->get_id() . '_taxes', $taxes );
 		}
 
 		return $taxes;
@@ -198,6 +215,36 @@ class Integration extends \WC_Integration {
 	private function have_api_credentials() {
 
 		return $this->get_option( 'api_id' ) && $this->get_option( 'api_key' );
+	}
+
+
+	public function add_order_view_action( $actions ) {
+		// Add custom action
+		$actions['wc_' . $this->get_plugin()->get_id() . '_submit_order_action'] = __( 'Submit order to Merit Aktiva', 'konekt-merit-aktiva' );
+
+		return $actions;
+	}
+
+
+	public function process_order_submit_action( $order ) {
+		if ( ! is_object( $order ) ) {
+			$order = wc_get_order( $order );
+		}
+
+		$this->get_plugin()->log( 'submit action' );
+
+		// Submit manually
+		$this->maybe_create_invoice( $order->get_id(), $this->get_option( 'invoice_sync_status', 'processing' ), $this->get_option( 'invoice_sync_status', 'processing' ), $order );
+	}
+
+
+	/**
+	 * Get plugin
+	 *
+	 * @return Konekt\WooCommerce\Merit_Aktiva\Plugin
+	 */
+	protected function get_plugin() {
+		return wc_konekt_woocommerce_merit_aktiva();
 	}
 
 

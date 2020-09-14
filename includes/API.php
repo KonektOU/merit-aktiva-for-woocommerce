@@ -82,8 +82,6 @@ class API extends Framework\SV_WC_API_Base {
 					'Code'           => $product->get_sku() ?? '',
 					'Description'    => $order_item->get_name(),
 					'Type'           => $this->integration->get_option( 'invoice_item_type' ),
-					'DiscountPct'    => 0,
-					'DiscountAmount' => 0,
 				],
 				'Quantity' => $this->format_number( $order_item->get_quantity() ),
 				'Price'    => $this->format_number( $order_item->get_total() / $order_item->get_quantity() ),
@@ -139,7 +137,6 @@ class API extends Framework\SV_WC_API_Base {
 				'PaidAmount'    => $this->format_number( $order->get_total() ),
 				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 			],
-			'RoundingAmount'  => wc_get_rounding_precision(),
 			'TotalAmount'     => $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) ),
 			'TaxAmount'       => [
 				[
@@ -186,6 +183,14 @@ class API extends Framework\SV_WC_API_Base {
 			}
 		} else {
 			// Request failed
+			$this->get_plugin()->add_order_note(
+				$order,
+				__( 'Invoice generation failed.', 'konekt-merit-aktiva' ),
+			);
+
+			if ( ! empty( $response->Message ) ) {
+				$this->get_plugin()->add_order_note( $order, $response->Message );
+			}
 		}
 
 		return 200 === $this->get_response_code();
