@@ -14,6 +14,12 @@ defined( 'ABSPATH' ) or exit;
 
 class API extends Framework\SV_WC_API_Base {
 
+	const ITEM_TYPE_STOCK_ITEM = 1;
+
+	const ITEM_TYPE_SERVICE = 2;
+
+	const ITEM_TYPE_ITEM = 3;
+
 
 	/**
 	 * API URL based on language
@@ -43,7 +49,7 @@ class API extends Framework\SV_WC_API_Base {
 		$this->api_key     = $this->integration->get_option( 'api_key' );
 		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization' ) ];
 
-		$this->set_request_content_type_header( 'application/x-www-form-urlencoded' );
+		$this->set_request_content_type_header( 'application/json' );
 		$this->set_request_accept_header( 'application/json' );
 
 		$this->response_handler = API\Response::class;
@@ -67,39 +73,55 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		$order_items = [];
+		$tax_items   = [];
+		$tax_amount  = [];
 
 		// Add order items
 		/** @var \WC_Order_Item_Product $order_item */
-		foreach ( $order->get_items() as $order_item ) {
+		foreach ( $order->get_items( [ 'line_item', 'shipping' ] ) as $order_item ) {
 
-			if ( ! is_callable( array( $order_item, 'get_product' ) ) ) {
-				continue;
-			}
-
-			$product       = $order_item->get_product();
-			$order_items[] = [
+			$order_row = [
 				'Item' => [
-					'Code'           => $product->get_sku() ?? '',
-					'Description'    => $order_item->get_name(),
-					'Type'           => $this->integration->get_option( 'invoice_item_type' ),
+					'Code'        => '',
+					'Description' => $order_item->get_name(),
+					'Type'        => self::ITEM_TYPE_ITEM,
 				],
 				'Quantity' => $this->format_number( $order_item->get_quantity() ),
-				'Price'    => $this->format_number( $order_item->get_total() / $order_item->get_quantity() ),
-				'TaxId'    => $this->integration->get_option( 'invoice_tax_id' ),
+				'Price'    => $this->format_number( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity() ),
+				'TaxId'    => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
 			];
-		}
 
-		// Add shipping method
-		if ( $order->get_shipping_method() ) {
-			$order_items[] = [
-				'Item' => [
-					'Code'        => $this->integration->get_option( 'invoice_shipping_sku' ),
-					'Description' => $order->get_shipping_method(),
-					'type'        => 2, // Service
-				],
-				'Quantity' => $this->format_number( 1 ),
-				'Price'    => $this->format_number( $order->get_shipping_total( 'edit' ) ),
-				'TaxId'    => $this->integration->get_option( 'invoice_tax_id' ),
+			if ( is_callable( array( $order_item, 'get_product' ) ) ) {
+
+				$product = $order_item->get_product();
+
+				if ( ! $product ) {
+					continue;
+				}
+
+				$order_row['Item']['Code'] = $product->get_sku();
+				$order_row['Item']['Type'] = $product->managing_stock() ? self::ITEM_TYPE_STOCK_ITEM : self::ITEM_TYPE_ITEM;
+
+				// Check for discounts
+				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) ) {
+					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
+
+					$order_row['DiscountPct']    = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
+					$order_row['DiscountAmount'] = $this->format_number( $discount_amount );
+					$order_row['Price']          = $this->format_number( $order_item->get_subtotal( 'edit' ) );
+				}
+
+			} else {
+
+				$order_row['Item']['Code'] = $this->integration->get_option( 'invoice_shipping_sku' );
+				$order_row['Item']['Type'] = self::ITEM_TYPE_SERVICE;
+			}
+
+			$order_items[] = $order_row;
+
+			$tax_items[] = [
+				'TaxId'  => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
+				'Amount' => $this->format_number( $order_item->get_total_tax( 'edit' ) ),
 			];
 		}
 
@@ -107,6 +129,25 @@ class API extends Framework\SV_WC_API_Base {
 
 		// Remove name and company before generate the Google Maps URL.
 		unset( $customer_address['first_name'], $customer_address['last_name'], $customer_address['company'] );
+
+		if ( ! empty( $tax_items ) ) {
+			foreach ( $tax_items as $tax_item ) {
+				if ( ! array_key_exists( $tax_item['TaxId'], $tax_amount ) ) {
+					$tax_amount[ $tax_item['TaxId'] ] = $tax_item['Amount'];
+				} else {
+					$tax_amount[ $tax_item['TaxId'] ] += $tax_item['Amount'];
+				}
+			}
+		}
+
+		$tax_items = [];
+
+		foreach ( $tax_amount as $tax_id => $tax_sum ) {
+			$tax_items[] = [
+				'TaxId'  => $tax_id,
+				'Amount' => $this->format_number( $tax_sum ),
+			];
+		}
 
 		// Prepare invoice data
 		$invoice = [
@@ -134,16 +175,11 @@ class API extends Framework\SV_WC_API_Base {
 			// Payment data
 			'Payment'         => [
 				'PaymentMethod' => $order->get_payment_method_title(),
-				'PaidAmount'    => $this->format_number( $order->get_total() ),
+				'PaidAmount'    => $order->get_total( 'edit' ),
 				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 			],
 			'TotalAmount'     => $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) ),
-			'TaxAmount'       => [
-				[
-					'TaxId'  => $this->integration->get_option( 'invoice_tax_id' ),
-					'Amount' => $this->format_number( $order->get_total_tax( 'edit' ) ),
-				],
-			],
+			'TaxAmount'       => $tax_items,
 
 			// Additional information
 			'DepartmentCode' => '',
@@ -185,7 +221,7 @@ class API extends Framework\SV_WC_API_Base {
 			// Request failed
 			$this->get_plugin()->add_order_note(
 				$order,
-				__( 'Invoice generation failed.', 'konekt-merit-aktiva' ),
+				__( 'Invoice generation failed.', 'konekt-merit-aktiva' )
 			);
 
 			if ( ! empty( $response->Message ) ) {
