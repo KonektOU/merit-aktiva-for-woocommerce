@@ -81,9 +81,9 @@ class Integration extends \WC_Integration {
 				'default' => '',
 			],
 
-			// Features
-			'features_section_title' => [
-				'title' => __( 'Features', 'konekt-merit-aktiva' ),
+			// Invoices
+			'invoices_section_title' => [
+				'title' => __( 'Invoices configuration', 'konekt-merit-aktiva' ),
 				'type'  => 'title',
 			],
 
@@ -106,21 +106,24 @@ class Integration extends \WC_Integration {
 				'description' => __( 'This determines which order status is needed to be sent to Merit Aktiva', 'konekt-merit-aktiva' ),
 			],
 
-			'invoice_item_type' => [
-				'title'       => __( 'Invoice item type', 'konekt-merit-aktiva' ),
-				'type'        => 'select',
-				'default'     => '1',
-				'options'     => [
-					'1' => __( 'Stock item', 'woocommerce' ),
-					'2' => __( 'Service', 'woocommerce' ),
-					'3' => __( 'Item', 'woocommerce' ),
-				],
-			],
-
 			'invoice_shipping_sku' => [
 				'title'       => __( 'Shipping SKU', 'konekt-merit-aktiva' ),
 				'type'        => 'text',
 				'default'     => '',
+			],
+
+			// Stock
+			'stock_section_title' => [
+				'title' => __( 'Stock management configuration', 'konekt-merit-aktiva' ),
+				'type'  => 'title',
+			],
+
+			'stock_sync_allowed' => [
+				'title'   => __( 'Stock management', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Allow syncing product stock with Merit Aktiva', 'konekt-merit-aktiva' ),
 			],
 
 			'primary_warehouse_id' => [
@@ -134,6 +137,40 @@ class Integration extends \WC_Integration {
 				'type'        => 'textarea',
 				'default'     => '',
 				'description' => __( 'Warehouses IDs that will be used, each warehouse ID on new line.', 'konekt-merit-aktiva' ),
+			],
+
+			// Product
+			'product_section_title' => [
+				'title' => __( 'Product configuration', 'konekt-merit-aktiva' ),
+				'type'  => 'title',
+			],
+
+			'product_sync_allowed' => [
+				'title'   => __( 'Products', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Allow syncing product data with Merit Aktiva', 'konekt-merit-aktiva' ),
+			],
+
+			// Advanced
+			'advanced_section_title' => [
+				'title' => __( 'Advanced configuration', 'konekt-merit-aktiva' ),
+				'type'  => 'title',
+			],
+
+			'stock_refresh_rate' => [
+				'title'       => __( 'Stock refresh rate', 'konekt-merit-aktiva' ),
+				'type'        => 'number',
+				'default'     => '15',
+				'description' => __( 'How often (in minutes) product stock is fetched from API?', 'konekt-merit-aktiva' )
+			],
+
+			'product_refresh_rate' => [
+				'title'       => __( 'Product refresh rate', 'konekt-merit-aktiva' ),
+				'type'        => 'number',
+				'default'     => '30',
+				'description' => __( 'How often (in days) product data is fetched from API?', 'konekt-merit-aktiva' )
 			],
 		];
 

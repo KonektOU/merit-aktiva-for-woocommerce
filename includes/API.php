@@ -249,6 +249,20 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	public function get_item( $product_sku ) {
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'path' => 'getitems',
+				'data' => [
+					'Code' => $product_sku,
+				],
+			] )
+		);
+
+		return $request;
+	}
+
+
 	/**
 	 * Format number
 	 *
@@ -328,6 +342,30 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		return $query;
+	}
+
+
+	/**
+	 * Gets the request body.
+	 *
+	 * @since 4.5.0
+	 * @return string
+	 */
+	protected function get_request_body() {
+
+		// GET & HEAD requests don't support a body
+		if ( in_array( strtoupper( $this->get_request_method() ), array( 'GET', 'HEAD' ) ) ) {
+			return wp_json_encode( $this->get_request()->get_data() );
+		}
+
+		return ( $this->get_request() && $this->get_request()->to_string() ) ? $this->get_request()->to_string() : '';
+	}
+
+
+	protected function get_request_args() {
+		$args = parent::get_request_args();
+
+		return $args;
 	}
 
 

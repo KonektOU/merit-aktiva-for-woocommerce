@@ -30,8 +30,14 @@ class Plugin extends Framework\SV_WC_Plugin {
 	/** @var string the integration class name */
 	const INTEGRATION_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Integration';
 
+	/** @var string the data store class name */
+	const DATASTORE_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Product_Data_Store';
+
 	/** @var \Konekt\WooCommerce\Merit_Aktiva\Integration the integration class instance */
 	private $integration;
+
+	/** @var string cache transient prefix */
+	private $cache_prefix;
 
 
 	/**
@@ -40,6 +46,8 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
+
+		$this->cache_prefix = 'wc_' . self::PLUGIN_ID . '_cache_';
 
 		parent::__construct(
 			self::PLUGIN_ID,
@@ -61,6 +69,9 @@ class Plugin extends Framework\SV_WC_Plugin {
 		$this->load_integration();
 
 		add_filter( 'woocommerce_integrations', array( $this, 'load_integration' ) );
+
+		// Add custom data store
+		add_filter( 'woocommerce_data_stores', array( $this, 'load_product_data_store' ) );
 	}
 
 
@@ -74,7 +85,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function load_integration( $integrations = [] ) {
 
 		if ( ! class_exists( self::INTEGRATION_CLASS ) ) {
-			require_once( $this->get_plugin_path() . '/Integration.php' );
+			require_once( $this->get_plugin_path() . '/includes/Integration.php' );
 		}
 
 		if ( ! in_array( self::INTEGRATION_CLASS, $integrations, true ) ) {
@@ -82,6 +93,21 @@ class Plugin extends Framework\SV_WC_Plugin {
 		}
 
 		return $integrations;
+	}
+
+
+	public function load_product_data_store( $stores = [] ) {
+
+		if ( ! class_exists( self::DATASTORE_CLASS ) ) {
+			require_once( $this->get_plugin_path() . '/includes/Product_Data_Store.php' );
+		}
+
+		$stores['product']          = self::DATASTORE_CLASS;
+		$stores['product-grouped']  = self::DATASTORE_CLASS;
+		$stores['product-variable'] = self::DATASTORE_CLASS;
+		$stores['product-grouped']  = self::DATASTORE_CLASS;
+
+		return $stores;
 	}
 
 
@@ -162,6 +188,16 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function add_order_note( \WC_Order $order, $message ) {
 
 		$order->add_order_note( sprintf( '%s: %s', $this->get_integration()->get_method_title(), $message ) );
+	}
+
+
+	public function get_cache( $cache_key ) {
+		return get_transient( $this->cache_prefix . $cache_key );
+	}
+
+
+	public function set_cache( $cache_key, $data, $expiration ) {
+		return set_transient( $this->cache_prefix . $cache_key, $data, $expiration );
 	}
 
 
