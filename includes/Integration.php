@@ -138,13 +138,15 @@ class Integration extends \WC_Integration {
 		];
 
 		if ( $this->have_api_credentials() ) {
-			$taxes = $this->get_taxes();
+			// Taxes
+			$this->form_fields['taxes_section_title'] = [
+				'title' => __( 'Taxes configuration', 'konekt-merit-aktiva' ),
+				'type'  => 'title',
+			];
 
-			$this->form_fields['invoice_tax_id'] = [
-				'title'       => __( 'Tax ID' ),
-				'type'        => 'select',
-				'default'     => '',
-				'options'     => $taxes,
+			$this->form_fields['taxes'] = [
+				'title' => __( 'Taxes', 'konekt-merit-aktiva' ),
+				'type'  => 'tax_mapping_table',
 			];
 		}
 	}
@@ -235,6 +237,152 @@ class Integration extends \WC_Integration {
 
 		// Submit manually
 		$this->maybe_create_invoice( $order->get_id(), $this->get_option( 'invoice_sync_status', 'processing' ), $this->get_option( 'invoice_sync_status', 'processing' ), $order );
+	}
+
+	public function generate_tax_mapping_table_html( $key, $data ) {
+		$field_key      = $this->get_field_key( $key );
+		$default_args   = [
+			'title'             => '',
+			'disabled'          => false,
+			'class'             => '',
+			'css'               => '',
+			'placeholder'       => '',
+			'desc_tip'          => false,
+			'description'       => '',
+			'custom_attributes' => [],
+		];
+		$data           = wp_parse_args( $data, $default_args );
+		$external_taxes = (array) $this->get_taxes();
+		$row_counter    = 0;
+		$wc_taxes       = $this->get_all_tax_rates();
+		$values         = (array) $this->get_option( $key, array() );
+
+		ob_start();
+		?>
+
+		<tr valign="top">
+			<th scope="row" class="titledesc">
+				<label for="<?php echo esc_attr( $field_key ); ?>"><?php echo wp_kses_post( $data['title'] ); ?> <?php echo $this->get_tooltip_html( $data ); // WPCS: XSS ok. ?></label>
+			</th>
+			<td class="forminp">
+
+				<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
+
+				<table class="">
+
+					<thead>
+						<tr>
+							<th>#</th>
+							<th><?php esc_html_e( 'Tax ID', 'konekt-merit-aktiva' ); ?></th>
+							<th><?php esc_html_e( 'Comment', 'konekt-merit-aktiva' ); ?></th>
+							<th><?php esc_html_e( 'Matching tax', 'konekt-merit-aktiva' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+
+						<?php foreach ( $external_taxes as $external_tax_id => $tax_comment ) : ?>
+
+							<?php
+							$row_counter++;
+
+							$value = $values[$external_tax_id] ?? false;
+							?>
+
+							<tr>
+								<td><?php echo $row_counter; ?>.</td>
+								<td><?php echo esc_html( $external_tax_id ); ?></td>
+								<td><?php echo esc_html( $tax_comment ); ?></td>
+								<td>
+									<select name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $external_tax_id ); ?>]" class="select">
+
+										<option value="0"></option>
+
+										<?php foreach ( $wc_taxes as $wc_tax_id => $wc_tax ) : ?>
+
+											<option value="<?php echo esc_attr( $wc_tax_id ); ?>" <?php selected( $wc_tax_id, $value, true ); ?>><?php echo esc_html( $wc_tax['label'] ); ?></option>
+
+										<?php endforeach; ?>
+									</select>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+
+					</tbody>
+
+				</table>
+			</td>
+		</tr>
+
+		<?php
+		return ob_get_clean();
+	}
+
+
+	/**
+	 * Validate tax mapping table field.
+	 *
+	 * @param  string $key Field key.
+	 * @param  string $value Posted Value.
+	 * @return string|array
+	 */
+	public function validate_tax_mapping_table_field( $key, $value ) {
+
+		return $this->validate_multiselect_field( $key, $value );
+	}
+
+
+	public function get_all_tax_rates() {
+
+		$rates = \WC_Tax::get_rates();
+
+		foreach ( $rates as $rate_key => $rate ) {
+			if ( 'yes' === $rate['shipping'] && ! isset( $rate['slug'] ) ) {
+				$rates[ $rate_key ]['slug'] = get_option( 'woocommerce_shipping_tax_class' );
+			}
+		}
+
+		foreach ( \WC_Tax::get_tax_class_slugs() as $tax_class ) {
+
+			foreach ( \WC_Tax::get_rates_for_tax_class( $tax_class ) as $rate ) {
+
+				$rates[ $rate->tax_rate_id ] = [
+					'label' => $rate->tax_rate_name,
+					'rate'  => $rate->tax_rate,
+					'slug'  => $tax_class,
+				];
+			}
+		}
+
+		return $rates;
+	}
+
+
+	public function get_matching_tax_code( $wc_tax_class ) {
+		$tax         = '';
+		$tax_rate_id = '';
+
+		foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
+
+			if ( $wc_tax_class == $rate['slug'] ) {
+				$tax_rate_id = $rate_id;
+
+				break;
+			}
+		}
+
+		if ( $tax_rate_id ) {
+			$current_taxes = (array) $this->get_option( 'taxes', [] );
+
+			foreach ( $current_taxes as $tax_code => $wc_tax_id ) {
+				if ( $tax_rate_id == $wc_tax_id ) {
+					$tax = $tax_code;
+
+					break;
+				}
+			}
+		}
+
+		return $tax;
 	}
 
 
