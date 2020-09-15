@@ -47,6 +47,8 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 			if ( false === ( $cached = $this->get_plugin()->get_cache( $stock_cache_key ) ) ) {
 				$item_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse_id );
 
+				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
+
 				if ( empty( $item_stock ) ) {
 					continue;
 				}
@@ -67,8 +69,6 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 						'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
 					];
 				}
-
-				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
 			}
 		}
 
