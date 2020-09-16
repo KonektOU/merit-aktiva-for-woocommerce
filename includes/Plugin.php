@@ -101,17 +101,18 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	public function load_product_data_store( $stores = [] ) {
 
-		if ( is_ajax() ) {
-			return $stores;
-		}
-
 		if ( ! class_exists( self::DATASTORE_CLASS ) ) {
 			require_once( $this->get_plugin_path() . '/includes/Product_Data_Store.php' );
+			require_once( $this->get_plugin_path() . '/includes/Data_Stores/Product.php' );
+			require_once( $this->get_plugin_path() . '/includes/Data_Stores/Product_Variable.php' );
+			require_once( $this->get_plugin_path() . '/includes/Data_Stores/Product_Variation.php' );
 		}
 
-		$stores['product']           = self::DATASTORE_CLASS;
-		$stores['product-variable']  = self::DATASTORE_CLASS;
-		$stores['product-variation'] = self::DATASTORE_CLASS;
+		$base_store = self::DATASTORE_CLASS;
+
+		$stores['product']           = new Data_Stores\Product( new $base_store ) ;
+		$stores['product-variable']  = new Data_Stores\Product_Variable( new $base_store ) ;
+		$stores['product-variation'] = new Data_Stores\Product_Variation( new $base_store ) ;
 
 		return $stores;
 	}

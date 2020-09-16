@@ -1,6 +1,6 @@
 <?php
 /**
- * Integration
+ * Base Data Store
  *
  * @package Merit Aktiva for WooCommerce
  * @author Konekt
@@ -10,21 +10,17 @@ namespace Konekt\WooCommerce\Merit_Aktiva;
 
 defined( 'ABSPATH' ) or exit;
 
-class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Object_Data_Store_Interface, \WC_Product_Data_Store_Interface {
+class Product_Data_Store {
 
 
-	public function read( &$product ) {
-		parent::read( $product );
+	public function read( $product ) {
 
-		if ( ! empty( $product->get_sku() ) ) {
+		if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
+			$this->refetch_product_stock( $product );
+		}
 
-			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
-				$this->refetch_product_stock( $product );
-			}
-
-			if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
-				$this->refetch_product_data( $product );
-			}
+		if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
+			$this->refetch_product_data( $product );
 		}
 	}
 
@@ -37,48 +33,54 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 	 * @return void
 	 */
 	private function refetch_product_stock( &$product ) {
-		$warehouses = $this->get_integration()->get_warehouses();
-		$quantities = [];
+		$warehouses     = $this->get_integration()->get_warehouses();
+		$quantities     = [];
+		$total_quantity = 0;
 
 		foreach ( $warehouses as $warehouse_id ) {
 
 			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse_id );
+			$item_stock      = $this->get_plugin()->get_cache( $stock_cache_key );
 
-			if ( false === ( $cached = $this->get_plugin()->get_cache( $stock_cache_key ) ) ) {
+			if ( false === $item_stock ) {
 				$item_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse_id );
 
 				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
+			}
 
-				if ( empty( $item_stock ) ) {
-					continue;
-				}
+			if ( $item_stock && $item_stock->Code !== $product->get_sku() ) {
+				$this->get_plugin()->log( sprintf( 'Wrong item stock fetched. Tried %s, got %s.', $product->get_sku(), $item_stock->Code ) );
 
-				if ( 'Laokaup' !== $item_stock->Type ) {
-					$quantities = null;
+				continue;
+			}
 
-					$product->set_manage_stock( false );
+			if ( empty( $item_stock ) ) {
+				continue;
+			}
 
-					break;
-				}
+			if ( 'Laokaup' !== $item_stock->Type ) {
+				$quantities = null;
 
+				$product->set_manage_stock( false );
+
+				break;
+			}
+
+			if ( ! $product->managing_stock() ) {
 				$product->set_manage_stock( true );
+			}
 
-				if ( $item_stock->InventoryQty ) {
-					$quantities[] = [
-						'location' => $warehouse_id,
-						'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
-					];
-				}
+			if ( $item_stock->InventoryQty ) {
+				$total_quantity += (int) $item_stock->InventoryQty;
+
+				$quantities[] = [
+					'location' => $warehouse_id,
+					'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
+				];
 			}
 		}
 
 		if ( null !== $quantities && $product->managing_stock() ) {
-			$total_quantity = 0;
-
-			foreach ( $quantities as $quantity ) {
-				$total_quantity += $quantity['quantity'];
-			}
-
 			// Save quantities to meta
 			$this->get_plugin()->add_product_meta(
 				$product,
@@ -87,13 +89,11 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 				]
 			);
 
-			$new_stock_count = wc_stock_amount( $total_quantity );
-
-			if ( $new_stock_count != $product->get_stock_quantity() ) {
-				$this->update_product_stock( $product->get_id(), $new_stock_count, 'set' );
+			if ( $total_quantity != $product->get_stock_quantity() ) {
+				$product->set_stock_quantity( $total_quantity );
 			}
 
-			if ( $new_stock_count > 0 && 'instock' !== $product->get_stock_status() ) {
+			if ( $total_quantity > 0 && 'instock' !== $product->get_stock_status() ) {
 				$product->set_stock_status( 'instock' );
 			}
 
@@ -166,6 +166,5 @@ class Product_Data_Store extends \WC_Product_Data_Store_CPT implements \WC_Objec
 	protected function get_integration() {
 		return $this->get_plugin()->get_integration();
 	}
-
 
 }

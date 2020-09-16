@@ -54,7 +54,7 @@ class API extends Framework\SV_WC_API_Base {
 
 		$this->response_handler = API\Response::class;
 
-		add_action('requests-requests.before_request', array($this, 'maybe_set_data_format_to_body'), 10, 5);
+		add_action( 'requests-requests.before_request', array($this, 'maybe_set_data_format_to_body'), 999, 5 );
 	}
 
 
@@ -267,7 +267,15 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		return empty( $request ) ? null : reset( $request->response_data );
+		$response = empty( $request ) ? null : reset( $request->response_data );
+
+		if ( $response && $response->Code !== $product_sku ) {
+			$this->get_plugin()->log( sprintf( 'Wrong item stock fetched. Tried %s, got %s.', $product_sku, $response->Code ) );
+
+			return false;
+		}
+
+		return $response;
 	}
 
 
@@ -373,7 +381,6 @@ class API extends Framework\SV_WC_API_Base {
 	 */
 	protected function get_request_body() {
 
-		// GET & HEAD requests don't support a body
 		if ( in_array( strtoupper( $this->get_request_method() ), array( 'GET', 'HEAD' ) ) ) {
 			return wp_json_encode( $this->get_request()->get_data() );
 		}
