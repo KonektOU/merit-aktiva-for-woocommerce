@@ -74,7 +74,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 		add_filter( 'woocommerce_data_stores', array( $this, 'load_product_data_store' ) );
 
 		// Custom hook
-		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 1 );
+		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 2 );
 	}
 
 
@@ -190,7 +190,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
-	public function attach_product_quantities_by_warehouse( $product ) {
+	public function attach_product_quantities_by_warehouse( $quantities, $product ) {
 		return $this->get_product_meta( $product, 'quantities_by_warehouse' );
 	}
 
