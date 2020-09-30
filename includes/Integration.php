@@ -37,6 +37,10 @@ class Integration extends \WC_Integration {
 				add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
 			}
 
+			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
+				add_filter( 'woocommerce_product_tabs', array( $this, 'add_product_stock_tab' ) );
+			}
+
 			// Add "Submit again to Merit Aktiva".
 			add_filter( 'woocommerce_order_actions', array( $this, 'add_order_view_action' ), 90, 1 );
 			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
@@ -136,7 +140,15 @@ class Integration extends \WC_Integration {
 				'title'       => __( 'Warehouses', 'konekt-merit-aktiva' ),
 				'type'        => 'textarea',
 				'default'     => '',
-				'description' => __( 'Warehouses IDs that will be used, each warehouse ID on new line.', 'konekt-merit-aktiva' ),
+				'description' => __( 'Warehouses IDs that will be used, each warehouse ID on new line. ID separated by colon, second half is title, for example 1:Main warehouse', 'konekt-merit-aktiva' ),
+			],
+
+			'stock_product_tab' => [
+				'title'   => __( 'Stock location tab', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Adds custom product tab to show product availability by warehouse. Only with multiple warehouses.', 'konekt-merit-aktiva' ),
 			],
 
 			// Product
@@ -231,15 +243,32 @@ class Integration extends \WC_Integration {
 
 	public function get_warehouses() {
 
-		$warehouse_ids = explode( "\n", $this->get_option( 'warehouses', [] ) );
+		$warehouses = explode( "\n", $this->get_option( 'warehouses', [] ) );
 
-		if ( ! empty( $warehouse_ids ) ) {
-			$warehouse_ids = array_map( 'trim', $warehouse_ids );
+		if ( ! empty( $warehouses ) ) {
+			$warehouses = array_map( 'trim', $warehouses );
+			$formatted  = [];
 
-			return $warehouse_ids;
+			foreach ( $warehouses as $warehouse_raw ) {
+				$warehouse = explode( ':', $warehouse_raw );
+
+				if ( count( $warehouse ) < 2 ) {
+					continue;
+				}
+
+				$formatted[] = [
+					'id'    => $warehouse[0],
+					'title' => $warehouse[1],
+				];
+			}
+
+			return $formatted;
 		}
 
-		return [0];
+		return [
+			'id'    => 0,
+			'title' => '',
+		];
 	}
 
 
@@ -289,6 +318,61 @@ class Integration extends \WC_Integration {
 		// Submit manually
 		$this->maybe_create_invoice( $order->get_id(), $this->get_option( 'invoice_sync_status', 'processing' ), $this->get_option( 'invoice_sync_status', 'processing' ), $order );
 	}
+
+
+	public function add_product_stock_tab( $tabs ) {
+		global $product;
+
+		if ( ! $product->get_sku() ) {
+			return $tabs;
+		}
+
+		$tabs['quantities_by_warehouse'] = [
+			'title'    => __( 'Stock status', 'wc-merit-aktiva' ),
+			'priority' => 60,
+			'callback' => function () use ( $product ) {
+				if ( $product->is_type( 'variable' ) ) {
+					$quantities = [];
+
+					foreach ( $product->get_available_variations() as $variation ) {
+						$variation_product    = wc_get_product( $variation['variation_id'] );
+						$variation_quantities = apply_filters( 'wc-merit-aktiva_product_quantities_by_warehouse', [], $variation_product );
+
+						if ( ! empty( $variation_quantities ) ) {
+							$variation_name = [];
+
+							foreach ($variation['attributes'] as $attribute) {
+								$variation_name[] = $attribute;
+							}
+
+							foreach ( $variation_quantities as $variation_quantity ) {
+								if ( ! array_key_exists( $variation_quantity['location'], $quantities ) ) {
+									$quantities[$variation_quantity['location']] = [
+										'location_title' => $variation_quantity['location_title'],
+										'products'     => [],
+									];
+								}
+
+								$quantities[$variation_quantity['location']]['products'][] = [
+									'sku'       => $variation_product->get_sku(),
+									'variation' => implode( ' ', $variation_name ),
+									'product'   => $variation_product,
+									'quantity'  => $variation_quantity['quantity'],
+								];
+							}
+						}
+					}
+
+					wc_get_template( 'single-product/tabs/stock-status-variable.php', compact( 'quantities' ), '', $this->get_plugin()->get_plugin_path() . '/templates/' );
+				} else {
+					wc_get_template( 'single-product/tabs/stock-status.php', compact( 'quantities' ), '', $this->get_plugin()->get_plugin_path() . '/templates/' );
+				}
+			}
+		];
+
+		return $tabs;
+	}
+
 
 	public function generate_tax_mapping_table_html( $key, $data ) {
 		$field_key      = $this->get_field_key( $key );

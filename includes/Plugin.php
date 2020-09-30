@@ -75,6 +75,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		// Custom hook
 		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 2 );
+		add_filter( self::PLUGIN_ID . '_warehouse_title', array( $this, 'attach_warehouse_title' ), 10, 2 );
 	}
 
 
@@ -191,7 +192,28 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 
 	public function attach_product_quantities_by_warehouse( $quantities, $product ) {
-		return $this->get_product_meta( $product, 'quantities_by_warehouse' );
+		$quantities = $this->get_product_meta( $product, 'quantities_by_warehouse' );
+
+		if ( $quantities ) {
+			foreach ( $quantities as $key => $quantity ) {
+				$quantities[$key]['location_title'] = $this->attach_warehouse_title( '', $quantity['location'] );
+			}
+		}
+
+		return $quantities;
+	}
+
+
+	public function attach_warehouse_title( $title, $warehouse_id ) {
+		$warehouses = $this->get_integration()->get_warehouses();
+
+		foreach ( $warehouses as $warehouse ) {
+			if ( $warehouse['id'] == $warehouse_id ) {
+				$title = $warehouse['title'];
+			}
+		}
+
+		return $title;
 	}
 
 

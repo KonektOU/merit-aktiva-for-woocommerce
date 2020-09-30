@@ -37,13 +37,13 @@ class Product_Data_Store {
 		$quantities     = [];
 		$total_quantity = 0;
 
-		foreach ( $warehouses as $warehouse_id ) {
+		foreach ( $warehouses as $warehouse ) {
 
-			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse_id );
+			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse['id'] );
 			$item_stock      = $this->get_plugin()->get_cache( $stock_cache_key );
 
 			if ( false === $item_stock ) {
-				$item_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse_id );
+				$item_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 
 				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
 			}
@@ -74,7 +74,7 @@ class Product_Data_Store {
 				$total_quantity += (int) $item_stock->InventoryQty;
 
 				$quantities[] = [
-					'location' => $warehouse_id,
+					'location' => $warehouse['id'],
 					'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
 				];
 			}
