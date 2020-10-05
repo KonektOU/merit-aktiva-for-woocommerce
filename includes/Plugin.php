@@ -30,8 +30,14 @@ class Plugin extends Framework\SV_WC_Plugin {
 	/** @var string the integration class name */
 	const INTEGRATION_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Integration';
 
+	/** @var string shipping method id */
+	const SHIPPING_METHOD_ID = 'konekt-merit-aktiva-shipping';
+
 	/** @var string the data store class name */
 	const DATASTORE_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Product_Data_Store';
+
+	/** @var string the shipping method class name */
+	const SHIPPING_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Shipping_Method';
 
 	/** @var \Konekt\WooCommerce\Merit_Aktiva\Integration the integration class instance */
 	private $integration;
@@ -68,10 +74,14 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		$this->load_integration();
 
+		// Add integration
 		add_filter( 'woocommerce_integrations', array( $this, 'load_integration' ) );
 
 		// Add custom data store
 		add_filter( 'woocommerce_data_stores', array( $this, 'load_product_data_store' ) );
+
+		// Add shipping method
+		add_filter( 'woocommerce_shipping_methods', array( $this, 'load_shipping_method' ) );
 
 		// Custom hook
 		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 2 );
@@ -116,6 +126,18 @@ class Plugin extends Framework\SV_WC_Plugin {
 		$stores['product-variation'] = new Data_Stores\Product_Variation( new $base_store ) ;
 
 		return $stores;
+	}
+
+
+	public function load_shipping_method( $methods = [] ) {
+
+		if ( ! class_exists( self::SHIPPING_CLASS ) ) {
+			require_once( $this->get_plugin_path() . '/includes/Shipping_Method.php' );
+		}
+
+		$methods[ self::SHIPPING_METHOD_ID ] = self::SHIPPING_CLASS;
+
+		return $methods;
 	}
 
 

@@ -11,8 +11,8 @@ if ( empty( $quantities ) ) {
 	<table class="shop_table">
 		<thead>
 			<tr>
-				<th><?php esc_html_e( 'Variation', 'wc-merit-aktiva' ); ?></th>
-				<th><?php esc_html_e( 'Stock count', 'wc-merit-aktiva' ); ?></th>
+				<th><?php esc_html_e( 'Variation', 'konekt-merit-aktiva' ); ?></th>
+				<th><?php esc_html_e( 'Stock count', 'konekt-merit-aktiva' ); ?></th>
 			</tr>
 		</thead>
 		<tbody>

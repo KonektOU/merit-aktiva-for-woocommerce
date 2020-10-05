@@ -328,7 +328,7 @@ class Integration extends \WC_Integration {
 		}
 
 		$tabs['quantities_by_warehouse'] = [
-			'title'    => __( 'Stock status', 'wc-merit-aktiva' ),
+			'title'    => __( 'Stock status', 'konekt-merit-aktiva' ),
 			'priority' => 60,
 			'callback' => function () use ( $product ) {
 				if ( $product->is_type( 'variable' ) ) {
@@ -336,7 +336,7 @@ class Integration extends \WC_Integration {
 
 					foreach ( $product->get_available_variations() as $variation ) {
 						$variation_product    = wc_get_product( $variation['variation_id'] );
-						$variation_quantities = apply_filters( 'wc-merit-aktiva_product_quantities_by_warehouse', [], $variation_product );
+						$variation_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $variation_product );
 
 						if ( ! empty( $variation_quantities ) ) {
 							$variation_name = [];
@@ -365,6 +365,8 @@ class Integration extends \WC_Integration {
 
 					wc_get_template( 'single-product/tabs/stock-status-variable.php', compact( 'quantities' ), '', $this->get_plugin()->get_plugin_path() . '/templates/' );
 				} else {
+					$quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+
 					wc_get_template( 'single-product/tabs/stock-status.php', compact( 'quantities' ), '', $this->get_plugin()->get_plugin_path() . '/templates/' );
 				}
 			}

@@ -167,4 +167,5 @@ class Product_Data_Store {
 		return $this->get_plugin()->get_integration();
 	}
 
+
 }
