@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.1';
+	const VERSION = '1.0.2';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -129,6 +129,15 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	/**
+	 * Load shipping method
+	 *
+	 * @param array $methods
+	 *
+	 * @since 1.0.2
+	 *
+	 * @return array
+	 */
 	public function load_shipping_method( $methods = [] ) {
 
 		if ( ! class_exists( self::SHIPPING_CLASS ) ) {
