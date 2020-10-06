@@ -313,8 +313,6 @@ class Integration extends \WC_Integration {
 			$order = wc_get_order( $order );
 		}
 
-		$this->get_plugin()->log( 'submit action' );
-
 		// Submit manually
 		$this->maybe_create_invoice( $order->get_id(), $this->get_option( 'invoice_sync_status', 'processing' ), $this->get_option( 'invoice_sync_status', 'processing' ), $order );
 	}

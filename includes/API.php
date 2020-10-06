@@ -54,7 +54,7 @@ class API extends Framework\SV_WC_API_Base {
 
 		$this->response_handler = API\Response::class;
 
-		add_action( 'requests-requests.before_request', array($this, 'maybe_set_data_format_to_body'), 999, 5 );
+		add_action( 'requests-requests.before_request', array( $this, 'maybe_set_data_format_to_body' ), 999, 5 );
 	}
 
 
@@ -74,9 +74,21 @@ class API extends Framework\SV_WC_API_Base {
 			$reference_number = $this->generate_reference_number( $order->get_id() );
 		}
 
-		$order_items = [];
-		$tax_items   = [];
-		$tax_amount  = [];
+		$order_items   = [];
+		$tax_items     = [];
+		$tax_amount    = [];
+		$location_code = null;
+
+		// Look for location code from shipping method
+		if ( $order->has_shipping_method( Plugin::SHIPPING_METHOD_ID ) ) {
+			foreach ( $order->get_shipping_methods() as $shipping_method ) {
+				if ( Plugin::SHIPPING_METHOD_ID === $shipping_method->get_method_id() ) {
+					$location_code = $shipping_method->get_meta( 'warehouse_location_id', true );
+
+					break;
+				}
+			}
+		}
 
 		// Add order items
 		/** @var \WC_Order_Item_Product $order_item */
@@ -104,6 +116,11 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['Item']['Code'] = $product->get_sku();
 				$order_row['Item']['Type'] = $product->managing_stock() ? self::ITEM_TYPE_STOCK_ITEM : self::ITEM_TYPE_ITEM;
 
+				// Attach warehouse
+				if ( null !== $location_code ) {
+					$order_row['LocationCode'] = $location_code;
+				}
+
 				// Check for discounts
 				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) ) {
 					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
@@ -120,8 +137,7 @@ class API extends Framework\SV_WC_API_Base {
 			}
 
 			$order_items[] = $order_row;
-
-			$tax_items[] = [
+			$tax_items[]   = [
 				'TaxId'  => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
 				'Amount' => $this->format_number( $order_item->get_total_tax( 'edit' ) ),
 			];
@@ -165,21 +181,12 @@ class API extends Framework\SV_WC_API_Base {
 
 			// Invoice data
 			'DocDate'         => $order->get_date_created()->format( 'YmdHis' ),
-			'DueDate'         => $order->get_date_paid()->format( 'YmdHis' ),
 			'RefNo'           => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_reference_number', $reference_number ),
-			'TransactionDate' => $order->get_date_paid()->format( 'YmdHis' ),
 			'InvoiceNo'       => $order->get_order_number(),
 			'CurrencyCode'    => $order->get_currency(),
 
 			// Invoice rows
 			'InvoiceRow'      => $order_items,
-
-			// Payment data
-			'Payment'         => [
-				'PaymentMethod' => $order->get_payment_method_title(),
-				'PaidAmount'    => $order->get_total( 'edit' ),
-				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
-			],
 			'TotalAmount'     => $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) ),
 			'TaxAmount'       => $tax_items,
 
@@ -189,6 +196,17 @@ class API extends Framework\SV_WC_API_Base {
 			'HComment'       => '',
 			'FComment'       => '',
 		];
+
+		// Payment data
+		if ( $order->is_paid() ) {
+			$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
+			$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
+			$invoice['Payment']         = [
+				'PaymentMethod' => $order->get_payment_method_title(),
+				'PaidAmount'    => $this->format_number( $order->get_total( 'edit' ) ),
+				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
+			];
+		}
 
 		$response = $this->perform_request(
 			$this->get_new_request( [

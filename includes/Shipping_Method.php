@@ -90,8 +90,11 @@ class Shipping_Method extends \WC_Shipping_Method {
 		// Only add the rate if all of the products are available there.
 		if ( $actual_products === $needed_products ) {
 			$this->add_rate( [
-				'label' => $this->title,
-				'cost'  => 0,
+				'label'     => $this->title,
+				'cost'      => 0,
+				'meta_data' => [
+					'warehouse_location_id' => $this->warehouse,
+				],
 			] );
 		}
 	}
