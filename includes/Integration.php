@@ -44,6 +44,9 @@ class Integration extends \WC_Integration {
 			// Add "Submit again to Merit Aktiva".
 			add_filter( 'woocommerce_order_actions', array( $this, 'add_order_view_action' ), 90, 1 );
 			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
+
+			// Show order item warehouse location
+			add_action( 'woocommerce_after_order_itemmeta', array( $this, 'show_warehouse_name' ), 10, 2 );
 		}
 	}
 
@@ -371,6 +374,21 @@ class Integration extends \WC_Integration {
 		];
 
 		return $tabs;
+	}
+
+
+	/**
+	 * Undocumented function
+	 *
+	 * @param integer $item_id
+	 * @param \WC_Order_Item $item
+	 *
+	 * @return void
+	 */
+	public function show_warehouse_name( $item_id, $item ) {
+		$api_order = $this->get_api()->get_order( $item->get_order_id() );
+		
+		wp_var_log( $api_order );
 	}
 
 

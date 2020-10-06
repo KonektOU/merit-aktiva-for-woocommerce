@@ -248,6 +248,24 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	public function get_order_warehouse_id( $order ) {
+		$location_code = null;
+
+		// Look for location code from shipping method
+		if ( $order->has_shipping_method( self::SHIPPING_METHOD_ID ) ) {
+			foreach ( $order->get_shipping_methods() as $shipping_method ) {
+				if ( self::SHIPPING_METHOD_ID === $shipping_method->get_method_id() ) {
+					$location_code = $shipping_method->get_meta( 'warehouse_location_id', true );
+
+					break;
+				}
+			}
+		}
+
+		return $location_code;
+	}
+
+
 	/**
 	 * Add order meta
 	 *
@@ -269,6 +287,21 @@ class Plugin extends Framework\SV_WC_Plugin {
 		}
 
 		$order->save_meta_data();
+	}
+
+
+	/**
+	 * Get order meta
+	 *
+	 * @param \WC_Order $order
+	 * @param string|array $meta
+	 * @param string $value
+	 *
+	 * @return void
+	 */
+	public function get_order_meta( \WC_Order $order, $meta_key ) {
+
+		return $order->get_meta( $this->get_order_meta_key( $meta_key ), true );
 	}
 
 

@@ -74,21 +74,12 @@ class API extends Framework\SV_WC_API_Base {
 			$reference_number = $this->generate_reference_number( $order->get_id() );
 		}
 
-		$order_items   = [];
-		$tax_items     = [];
-		$tax_amount    = [];
-		$location_code = null;
+		$order_items = [];
+		$tax_items   = [];
+		$tax_amount  = [];
 
 		// Look for location code from shipping method
-		if ( $order->has_shipping_method( Plugin::SHIPPING_METHOD_ID ) ) {
-			foreach ( $order->get_shipping_methods() as $shipping_method ) {
-				if ( Plugin::SHIPPING_METHOD_ID === $shipping_method->get_method_id() ) {
-					$location_code = $shipping_method->get_meta( 'warehouse_location_id', true );
-
-					break;
-				}
-			}
-		}
+		$location_code = $this->get_plugin()->get_order_warehouse_id( $order );
 
 		// Add order items
 		/** @var \WC_Order_Item_Product $order_item */
@@ -292,6 +283,25 @@ class API extends Framework\SV_WC_API_Base {
 
 			return false;
 		}
+
+		return $response;
+	}
+
+
+	public function get_order( $order_id ) {
+		$order        = wc_get_order( $order_id );
+		$request_data = [
+			'Id' => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
+		];
+
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'path' => 'getinvoice',
+				'data' => $request_data,
+			] )
+		);
+
+		$response = empty( $request ) ? null : reset( $request->response_data );
 
 		return $response;
 	}
