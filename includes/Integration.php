@@ -33,20 +33,9 @@ class Integration extends \WC_Integration {
 		add_action( 'woocommerce_update_options_integration_' . $this->id, [ $this, 'process_admin_options' ] );
 
 		if ( $this->have_api_credentials() ) {
-			if ( 'yes' === $this->get_option( 'invoice_sync_allowed', 'no' ) ) {
-				add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
-			}
-
 			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
 				add_filter( 'woocommerce_product_tabs', array( $this, 'add_product_stock_tab' ) );
 			}
-
-			// Add "Submit again to Merit Aktiva".
-			add_filter( 'woocommerce_order_actions', array( $this, 'add_order_view_action' ), 90, 1 );
-			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
-
-			// Show order item warehouse location
-			add_action( 'woocommerce_after_order_itemmeta', array( $this, 'show_warehouse_name' ), 10, 2 );
 		}
 	}
 
@@ -117,6 +106,13 @@ class Integration extends \WC_Integration {
 				'title'       => __( 'Shipping SKU', 'konekt-merit-aktiva' ),
 				'type'        => 'text',
 				'default'     => '',
+			],
+
+			'invoice_payment_method_name' => [
+				'title'       => __( 'Payment method name', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'default'     => '',
+				'description' => __( 'This will override the payment method title from WooCommerce. Leave empty for WooCommerce title.', 'konekt-merit-aktiva' ),
 			],
 
 			// Stock
@@ -210,37 +206,20 @@ class Integration extends \WC_Integration {
 	 * @return void
 	 */
 	public function get_taxes() {
-		if ( false === ( $taxes = get_transient( 'wc_' . $this->get_plugin()->get_id() . '_taxes' ) ) ) {
+		if ( false === ( $taxes = $this->get_plugin()->get_cache( 'taxes' ) ) ) {
 			$taxes = $this->get_api()->get_taxes();
 
 			if ( ! empty( $taxes ) ) {
 				$taxes = array_column( (array) $taxes, 'Code', 'Id' );
+
+				$this->get_plugin()->set_cache( 'taxes', $taxes, MONTH_IN_SECONDS );
+			} else {
+				$taxes = [];
 			}
 
-			set_transient( 'wc_' . $this->get_plugin()->get_id() . '_taxes', $taxes );
 		}
 
 		return $taxes;
-	}
-
-
-	/**
-	 * Create invoice (if order status is okay)
-	 *
-	 * @param itneger $order_id
-	 * @param string $order_old_status
-	 * @param string $order_new_status
-	 * @param \WC_Order $order
-	 *
-	 * @return void
-	 */
-	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status, $order ) {
-
-		if ( $order_new_status !== $this->get_option( 'invoice_sync_status', 'processing' ) ) {
-			return;
-		}
-
-		$this->get_api()->create_invoice( $order );
 	}
 
 
@@ -297,27 +276,9 @@ class Integration extends \WC_Integration {
 	 *
 	 * @return bool
 	 */
-	private function have_api_credentials() {
+	public function have_api_credentials() {
 
 		return $this->get_option( 'api_id' ) && $this->get_option( 'api_key' );
-	}
-
-
-	public function add_order_view_action( $actions ) {
-		// Add custom action
-		$actions['wc_' . $this->get_plugin()->get_id() . '_submit_order_action'] = __( 'Submit order to Merit Aktiva', 'konekt-merit-aktiva' );
-
-		return $actions;
-	}
-
-
-	public function process_order_submit_action( $order ) {
-		if ( ! is_object( $order ) ) {
-			$order = wc_get_order( $order );
-		}
-
-		// Submit manually
-		$this->maybe_create_invoice( $order->get_id(), $this->get_option( 'invoice_sync_status', 'processing' ), $this->get_option( 'invoice_sync_status', 'processing' ), $order );
 	}
 
 
@@ -374,21 +335,6 @@ class Integration extends \WC_Integration {
 		];
 
 		return $tabs;
-	}
-
-
-	/**
-	 * Undocumented function
-	 *
-	 * @param integer $item_id
-	 * @param \WC_Order_Item $item
-	 *
-	 * @return void
-	 */
-	public function show_warehouse_name( $item_id, $item ) {
-		$api_order = $this->get_api()->get_order( $item->get_order_id() );
-		
-		wp_var_log( $api_order );
 	}
 
 

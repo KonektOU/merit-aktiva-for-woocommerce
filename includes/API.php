@@ -96,6 +96,10 @@ class API extends Framework\SV_WC_API_Base {
 				'TaxId'    => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
 			];
 
+			if ( empty( $order_row['TaxId'] ) && 'inherit' === $order_item->get_tax_class() ) {
+				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
+			}
+
 			if ( is_callable( array( $order_item, 'get_product' ) ) ) {
 
 				$product = $order_item->get_product();
@@ -197,6 +201,10 @@ class API extends Framework\SV_WC_API_Base {
 				'PaidAmount'    => $this->format_number( $order->get_total( 'edit' ) ),
 				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 			];
+
+			if ( ! empty( $this->integration->get_option( 'invoice_payment_method_name', '' ) ) ) {
+				$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'invoice_payment_method_name', '' );
+			}
 		}
 
 		$response = $this->perform_request(
@@ -256,7 +264,7 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		return json_decode( $request->response_data );
+		return $request->response_data;
 	}
 
 
@@ -301,9 +309,7 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		$response = empty( $request ) ? null : reset( $request->response_data );
-
-		return $response;
+		return empty( $request ) ? null : $request->response_data;
 	}
 
 

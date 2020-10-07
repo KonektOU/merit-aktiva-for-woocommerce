@@ -22,16 +22,19 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.2';
+	const VERSION = '1.0.3';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
 
+	/** @var string shipping method id */
+	const SHIPPING_METHOD_ID = 'konekt-merit-aktiva-shipping';
+
 	/** @var string the integration class name */
 	const INTEGRATION_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Integration';
 
-	/** @var string shipping method id */
-	const SHIPPING_METHOD_ID = 'konekt-merit-aktiva-shipping';
+	/** @var string the orders class name */
+	const ORDERS_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Orders';
 
 	/** @var string the data store class name */
 	const DATASTORE_CLASS = '\\Konekt\\WooCommerce\\Merit_Aktiva\\Product_Data_Store';
@@ -41,6 +44,9 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	/** @var \Konekt\WooCommerce\Merit_Aktiva\Integration the integration class instance */
 	private $integration;
+
+	/** @var \Konekt\WooCommerce\Merit_Aktiva\Orders the orders class instance */
+	private $orders;
 
 	/** @var string cache transient prefix */
 	private $cache_prefix;
@@ -73,6 +79,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function init_plugin() {
 
 		$this->load_integration();
+		$this->load_orders();
 
 		// Add integration
 		add_filter( 'woocommerce_integrations', array( $this, 'load_integration' ) );
@@ -107,6 +114,33 @@ class Plugin extends Framework\SV_WC_Plugin {
 		}
 
 		return $integrations;
+	}
+
+
+	public function load_orders() {
+		if ( ! class_exists( self::ORDERS_CLASS ) ) {
+			require_once( $this->get_plugin_path() . '/includes/Orders.php' );
+		}
+
+		return $this->get_orders();
+	}
+
+
+	/**
+	 * Get orders
+	 *
+	 * @return array
+	 */
+	public function get_orders() {
+
+
+		if ( null === $this->orders ) {
+			$orders = self::ORDERS_CLASS;
+
+			$this->orders = new $orders( $this->get_integration() );
+		}
+
+		return $this->orders;
 	}
 
 
@@ -319,13 +353,41 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	/**
+	 * Get cached item
+	 *
+	 * @param string $cache_key
+	 *
+	 * @return mixed
+	 */
 	public function get_cache( $cache_key ) {
 		return get_transient( $this->cache_prefix . $cache_key );
 	}
 
 
+	/**
+	 * Add item to cache
+	 *
+	 * @param string $cache_key
+	 * @param mixed $data
+	 * @param int $expiration
+	 *
+	 * @return bool
+	 */
 	public function set_cache( $cache_key, $data, $expiration ) {
 		return set_transient( $this->cache_prefix . $cache_key, $data, $expiration );
+	}
+
+
+	/**
+	 * Delete item from cache
+	 *
+	 * @param string $cache_key
+	 *
+	 * @return bool
+	 */
+	public function delete_cache( $cache_key ) {
+		return delete_transient( $this->cache_prefix . $cache_key );
 	}
 
 
