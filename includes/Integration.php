@@ -31,6 +31,7 @@ class Integration extends \WC_Integration {
 
 		// Bind to the save action for the settings.
 		add_action( 'woocommerce_update_options_integration_' . $this->id, [ $this, 'process_admin_options' ] );
+		add_action( 'init', array( $this, 'init' ) );
 
 		if ( $this->have_api_credentials() ) {
 			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
@@ -183,9 +184,21 @@ class Integration extends \WC_Integration {
 				'default'     => '30',
 				'description' => __( 'How often (in days) product data is fetched from API?', 'konekt-merit-aktiva' )
 			],
+
+			'sync_all_products' => [
+				'title' => __( 'Sync products', 'konekt-merit-aktiva' ),
+				'type'  => 'manual-product'
+			]
 		];
 
 		if ( $this->have_api_credentials() ) {
+
+			$this->form_fields['sync_all_products'] = [
+				'title'       => __( 'Sync products', 'konekt-merit-aktiva' ),
+				'type'        => 'manual_product_sync',
+				'description' => __( 'Creates an invoice with all products on the invoice and then deletes the invoice. The result is that you have all the products in Merit Aktiva. Products without SKU will be skipped.', 'konekt-merit-aktiva' ),
+			];
+
 			// Taxes
 			$this->form_fields['taxes_section_title'] = [
 				'title' => __( 'Taxes configuration', 'konekt-merit-aktiva' ),
@@ -196,6 +209,76 @@ class Integration extends \WC_Integration {
 				'title' => __( 'Taxes', 'konekt-merit-aktiva' ),
 				'type'  => 'tax_mapping_table',
 			];
+		}
+	}
+
+
+	public function init() {
+		if ( ! empty( $_GET['action'] ) && 'create-products' === $_GET['action'] ) {
+			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], 'create-products' ) ) {
+				if ( did_action( $this->get_plugin()->get_id() . '_create-products' ) ) {
+					return;
+				}
+
+				do_action( $this->get_plugin()->get_id() . '_create-products' );
+
+				$order    = wc_create_order( [
+					'status' => 'on-hold',
+				] );
+				$products = wc_get_products( [
+					'limit' => -1,
+				] );
+
+				foreach ( $products as $product ) {
+					if ( $product->is_type( 'variable' ) ) {
+						foreach ( $product->get_children() as $variation_id ) {
+							$variation_product = wc_get_product( $variation_id );
+
+							if ( ! $variation_product->get_sku() ) {
+								continue;
+							}
+
+							if ( ! $variation_product->managing_stock() ) {
+								$variation_product->set_manage_stock( true );
+								$variation_product->save();
+							}
+
+							$order->add_product( $variation_product, 1 );
+						}
+					} else {
+						if ( ! $product->get_sku() ) {
+							continue;
+						}
+
+						if ( ! $product->managing_stock() ) {
+							$product->set_manage_stock( true );
+							$product->save();
+						}
+
+						$order->add_product( $product, 1 );
+					}
+				}
+
+				$customer = new \WC_Customer( get_current_user_id() );
+
+				$order->set_billing_address_1( $customer->get_billing_address_1() );
+				$order->set_billing_address_2( $customer->get_billing_address_2() );
+				$order->set_billing_country( $customer->get_billing_country() );
+
+				$order->set_customer_id( get_current_user_id() );
+				$order->calculate_totals();
+				$order->save();
+
+				// Create invoice to Aktiva to save the products
+				$this->get_api()->create_invoice( $order, true );
+
+				// Delete invoice from Aktiva, and order from WC
+				$this->get_api()->delete_invoice( $order->get_id() );
+				$order->delete( true );
+
+				wp_safe_redirect( $this->get_plugin()->get_settings_url() );
+				exit;
+			}
 		}
 	}
 
@@ -335,6 +418,41 @@ class Integration extends \WC_Integration {
 		];
 
 		return $tabs;
+	}
+
+
+	public function generate_manual_product_sync_html( $key, $data ) {
+		$field_key = $this->get_field_key( $key );
+		$defaults  = array(
+			'title'             => '',
+			'disabled'          => false,
+			'class'             => '',
+			'css'               => '',
+			'placeholder'       => '',
+			'type'              => 'text',
+			'desc_tip'          => false,
+			'description'       => '',
+			'custom_attributes' => array(),
+		);
+
+		$data = wp_parse_args( $data, $defaults );
+
+		ob_start();
+		?>
+		<tr valign="top">
+			<th scope="row" class="titledesc">
+				<label for="<?php echo esc_attr( $field_key ); ?>"><?php echo wp_kses_post( $data['title'] ); ?> <?php echo $this->get_tooltip_html( $data ); // WPCS: XSS ok. ?></label>
+			</th>
+			<td class="forminp">
+				<fieldset>
+					<a href="<?php echo esc_url( add_query_arg( [ 'nonce' => wp_create_nonce( 'create-products' ), 'action' => 'create-products' ] ) ) ?>" class="button"><?php echo esc_html_e( 'Create products', 'konekt-merit-aktiva' ); ?></a>
+					<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
+				</fieldset>
+			</td>
+		</tr>
+		<?php
+
+		return ob_get_clean();
 	}
 
 

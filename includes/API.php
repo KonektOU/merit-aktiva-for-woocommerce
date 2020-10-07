@@ -65,7 +65,7 @@ class API extends Framework\SV_WC_API_Base {
 	 *
 	 * @return bool
 	 */
-	public function create_invoice( $order ) {
+	public function create_invoice( $order, $set_default_location = false ) {
 
 		// Support for "Estonian Banklinks for WooCommerce"
 		$reference_number = $order->get_meta( '_wc_estonian_banklinks_reference_number', true );
@@ -114,6 +114,10 @@ class API extends Framework\SV_WC_API_Base {
 				// Attach warehouse
 				if ( null !== $location_code ) {
 					$order_row['LocationCode'] = $location_code;
+				}
+
+				if ( true === $set_default_location ) {
+					$order_row['Item']['DefLocationCode'] = $this->integration->get_option( 'primary_warehouse_id', '1' );
 				}
 
 				// Check for discounts
@@ -306,6 +310,24 @@ class API extends Framework\SV_WC_API_Base {
 			$this->get_new_request( [
 				'path' => 'getinvoice',
 				'data' => $request_data,
+			] )
+		);
+
+		return empty( $request ) ? null : $request->response_data;
+	}
+
+
+	public function delete_invoice( $order_id ) {
+		$order        = wc_get_order( $order_id );
+		$request_data = [
+			'Id' => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
+		];
+
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'method' => 'POST',
+				'path'   => 'deleteinvoice',
+				'data'   => $request_data,
 			] )
 		);
 
