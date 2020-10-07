@@ -1,0 +1,261 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Merit Aktiva for WooCommerce\n"
+"POT-Creation-Date: 2020-10-07 12:28+0300\n"
+"PO-Revision-Date: 2020-10-07 12:30+0300\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: et\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.4.1\n"
+"X-Poedit-Basepath: ../..\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Poedit-Flags-xgettext: --add-comments=translators:\n"
+"X-Poedit-WPHeader: merit-aktiva-for-woocommerce.php\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Poedit-KeywordsList: __;_e;_n:1,2;_x:1,2c;_ex:1,2c;_nx:4c,1,2;esc_attr__;"
+"esc_attr_e;esc_attr_x:1,2c;esc_html__;esc_html_e;esc_html_x:1,2c;_n_noop:1,2;"
+"_nx_noop:3c,1,2;__ngettext_noop:1,2\n"
+"X-Poedit-SearchPath-0: .\n"
+"X-Poedit-SearchPathExcluded-0: *.min.js\n"
+"X-Poedit-SearchPathExcluded-1: vendor\n"
+
+#: includes/API.php:229
+#, php-format
+msgid "Created invoice with ID %s. Customer ID is %s."
+msgstr ""
+
+#: includes/API.php:243
+msgid "Invoice generation failed."
+msgstr ""
+
+#: includes/Integration.php:26
+msgid "Merit Aktiva"
+msgstr ""
+
+#. Description of the plugin/theme
+#: includes/Integration.php:27
+msgid ""
+"Supercharge your WooCommerce with Merit Aktiva integration for seamless "
+"orders data exchange."
+msgstr ""
+
+#: includes/Integration.php:54
+msgid "API configuration"
+msgstr ""
+
+#: includes/Integration.php:59
+msgid "Localization"
+msgstr ""
+
+#: includes/Integration.php:62
+msgid "Estonian"
+msgstr ""
+
+#: includes/Integration.php:63
+msgid "Finnish"
+msgstr ""
+
+#: includes/Integration.php:64
+msgid "Polish"
+msgstr ""
+
+#: includes/Integration.php:69
+msgid "API ID"
+msgstr ""
+
+#: includes/Integration.php:75
+msgid "API key"
+msgstr ""
+
+#: includes/Integration.php:82
+msgid "Invoices configuration"
+msgstr ""
+
+#: includes/Integration.php:87
+msgid "Invoices"
+msgstr ""
+
+#: includes/Integration.php:91
+msgid "Allow sending invoices to Merit Aktiva"
+msgstr ""
+
+#: includes/Integration.php:95
+msgid "Order status"
+msgstr ""
+
+#: includes/Integration.php:99
+msgid "Processing"
+msgstr ""
+
+#: includes/Integration.php:100
+msgid "Completed"
+msgstr ""
+
+#: includes/Integration.php:102
+msgid "This determines which order status is needed to be sent to Merit Aktiva"
+msgstr ""
+
+#: includes/Integration.php:106
+msgid "Shipping SKU"
+msgstr ""
+
+#: includes/Integration.php:112
+msgid "Payment method name"
+msgstr ""
+
+#: includes/Integration.php:115
+msgid ""
+"This will override the payment method title from WooCommerce. Leave empty "
+"for WooCommerce title."
+msgstr ""
+
+#: includes/Integration.php:120
+msgid "Stock management configuration"
+msgstr ""
+
+#: includes/Integration.php:125
+msgid "Stock management"
+msgstr ""
+
+#: includes/Integration.php:129
+msgid "Allow syncing product stock with Merit Aktiva"
+msgstr ""
+
+#: includes/Integration.php:133
+msgid "Primary warehouse ID"
+msgstr ""
+
+#: includes/Integration.php:139
+msgid "Warehouses"
+msgstr "Laod"
+
+#: includes/Integration.php:142
+msgid ""
+"Warehouses IDs that will be used, each warehouse ID on new line. ID "
+"separated by colon, second half is title, for example 1:Main warehouse"
+msgstr ""
+
+#: includes/Integration.php:146
+msgid "Stock location tab"
+msgstr ""
+
+#: includes/Integration.php:150
+msgid ""
+"Adds custom product tab to show product availability by warehouse. Only with "
+"multiple warehouses."
+msgstr ""
+
+#: includes/Integration.php:155
+msgid "Product configuration"
+msgstr ""
+
+#: includes/Integration.php:160
+msgid "Products"
+msgstr ""
+
+#: includes/Integration.php:164
+msgid "Allow syncing product data with Merit Aktiva"
+msgstr ""
+
+#: includes/Integration.php:169
+msgid "Advanced configuration"
+msgstr ""
+
+#: includes/Integration.php:174
+msgid "Stock refresh rate"
+msgstr ""
+
+#: includes/Integration.php:177
+msgid "How often (in minutes) product stock is fetched from API?"
+msgstr ""
+
+#: includes/Integration.php:181
+msgid "Product refresh rate"
+msgstr ""
+
+#: includes/Integration.php:184
+msgid "How often (in days) product data is fetched from API?"
+msgstr ""
+
+#: includes/Integration.php:191
+msgid "Taxes configuration"
+msgstr ""
+
+#: includes/Integration.php:196
+msgid "Taxes"
+msgstr ""
+
+#: includes/Integration.php:293
+msgid "Stock status"
+msgstr "Saadavus"
+
+#: includes/Integration.php:375
+msgid "Tax ID"
+msgstr ""
+
+#: includes/Integration.php:376
+msgid "Comment"
+msgstr ""
+
+#: includes/Integration.php:377
+msgid "Matching tax"
+msgstr ""
+
+#: includes/Orders.php:62 includes/Shipping_Method.php:56
+#: templates/single-product/tabs/stock-status.php:10
+msgid "Warehouse"
+msgstr "Ladu"
+
+#: includes/Orders.php:75
+msgid "Submit order to Merit Aktiva"
+msgstr ""
+
+#. Plugin Name of the plugin/theme
+#: includes/Plugin.php:429
+msgid "Merit Aktiva for WooCommerce"
+msgstr ""
+
+#: includes/Shipping_Method.php:19
+msgid "Local pickup by Merit Aktiva"
+msgstr ""
+
+#: includes/Shipping_Method.php:20
+msgid ""
+"Allow local pickup by warehouse. For example, customer can pick up the order"
+msgstr ""
+
+#: includes/Shipping_Method.php:49
+msgid "Title"
+msgstr ""
+
+#: includes/Shipping_Method.php:51
+msgid "This controls the title which the user sees during checkout."
+msgstr ""
+
+#: includes/Shipping_Method.php:52
+msgid "Local pickup"
+msgstr ""
+
+#: templates/single-product/tabs/stock-status-variable.php:14
+msgid "Variation"
+msgstr ""
+
+#: templates/single-product/tabs/stock-status-variable.php:15
+#: templates/single-product/tabs/stock-status.php:11
+msgid "Stock count"
+msgstr ""
+
+#. Plugin URI of the plugin/theme
+msgid "https://konekt.ee/merit-aktiva-for-woocommerce"
+msgstr ""
+
+#. Author of the plugin/theme
+msgid "Konekt"
+msgstr ""
+
+#. Author URI of the plugin/theme
+msgid "https://konekt.ee"
+msgstr ""

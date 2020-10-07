@@ -45,6 +45,8 @@ class Konekt_WC_Merit_Aktiva {
 	/** @var array the admin notices to add */
 	private $notices = array();
 
+	public $textdoamin = 'konekt-merit-aktiva';
+
 
 	/**
 	 * Constructs the class.
