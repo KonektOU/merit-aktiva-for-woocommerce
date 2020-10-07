@@ -222,14 +222,17 @@ class Integration extends \WC_Integration {
 
 				do_action( $this->get_plugin()->get_id() . '_create-products' );
 
-				$order    = wc_create_order( [
+				$current_page = absint( wc_get_var( $_GET['page'], 1 ) );
+				$order        = wc_create_order( [
 					'status' => 'on-hold',
 				] );
-				$products = wc_get_products( [
-					'limit' => -1,
+				$products     = wc_get_products( [
+					'limit'    => 500,
+					'paginate' => true,
+					'page'     => $current_page,
 				] );
 
-				foreach ( $products as $product ) {
+				foreach ( $products->products as $product ) {
 					if ( $product->is_type( 'variable' ) ) {
 						foreach ( $product->get_children() as $variation_id ) {
 							$variation_product = wc_get_product( $variation_id );
@@ -276,7 +279,15 @@ class Integration extends \WC_Integration {
 				$this->get_api()->delete_invoice( $order->get_id() );
 				$order->delete( true );
 
-				wp_safe_redirect( $this->get_plugin()->get_settings_url() );
+				if ( $products->max_num_pages > 1 && $current_page < $products->max_num_pages ) {
+					wp_safe_redirect( add_query_arg( [
+						'page'   => $current_page + 1,
+						'action' => 'create-products',
+						'nonce'  => wp_create_nonce( 'create-products' ),
+					], $this->get_plugin()->get_settings_url() ) );
+				} else {
+					wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
+				}
 				exit;
 			}
 		}
