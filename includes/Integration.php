@@ -379,10 +379,6 @@ class Integration extends \WC_Integration {
 	public function add_product_stock_tab( $tabs ) {
 		global $product;
 
-		if ( ! $product->get_sku() ) {
-			return $tabs;
-		}
-
 		$tabs['quantities_by_warehouse'] = [
 			'title'    => __( 'Stock status', 'konekt-merit-aktiva' ),
 			'priority' => 60,

@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.4';
+	const VERSION = '1.0.4.2';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -259,9 +259,27 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function attach_product_quantities_by_warehouse( $quantities, $product ) {
 		$quantities = $this->get_product_meta( $product, 'quantities_by_warehouse' );
 
-		if ( $quantities ) {
+		if ( empty( $quantities ) ) {
+			$quantities = [];
+		}
+
+		foreach ( $this->get_integration()->get_warehouses() as $warehouse ) {
+			$warehouse_available = false;
+
 			foreach ( $quantities as $key => $quantity ) {
 				$quantities[$key]['location_title'] = $this->attach_warehouse_title( '', $quantity['location'] );
+
+				if ( $warehouse['id'] == $quantity['location'] ) {
+					$warehouse_available = true;
+				}
+			}
+
+			if ( false === $warehouse_available ) {
+				$quantities[] = [
+					'location_title' => $this->attach_warehouse_title( '', $warehouse['id'] ),
+					'location'       => $warehouse['id'],
+					'quantity'       => 0,
+				];
 			}
 		}
 
