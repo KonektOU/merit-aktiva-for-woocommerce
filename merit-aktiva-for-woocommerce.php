@@ -5,7 +5,7 @@
  * Description: Supercharge your WooCommerce with Merit Aktiva integration for seamless orders data exchange.
  * Author: Konekt
  * Author URI: https://konekt.ee
- * Version: 1.0.4.2
+ * Version: 1.0.4.3
  * Text Domain: konekt-merit-aktiva
  * Domain Path: /i18n/languages/
  *
