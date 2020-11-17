@@ -15,12 +15,14 @@ class Product_Data_Store {
 
 	public function read( $product ) {
 
-		if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
-			$this->refetch_product_stock( $product );
-		}
+		if ( 'no' === $this->get_integration()->get_option( 'sync_in_product_only' ) || is_product() ) {
+			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
+				$this->refetch_product_stock( $product );
+			}
 
-		if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
-			$this->refetch_product_data( $product );
+			if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
+				$this->refetch_product_data( $product );
+			}
 		}
 	}
 
@@ -154,7 +156,7 @@ class Product_Data_Store {
 	 * @return Konekt\WooCommerce\Merit_Aktiva\API
 	 */
 	protected function get_api() {
-		return $this->get_plugin()->get_integration()->get_api();
+		return $this->get_integration()->get_api();
 	}
 
 

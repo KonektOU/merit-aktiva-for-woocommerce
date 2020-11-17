@@ -14,7 +14,7 @@ class Integration extends \WC_Integration {
 
 
 	/** @var Konekt\WooCommerce\Merit_Aktiva\API API handler instance */
-	protected $api;
+	protected $api = null;
 
 
 	/**
@@ -185,6 +185,14 @@ class Integration extends \WC_Integration {
 				'description' => __( 'How often (in days) product data is fetched from API?', 'konekt-merit-aktiva' )
 			],
 
+			'sync_in_product_only' => [
+				'title'   => __( 'Sync timing', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'When selected, product sync will only be executed when the product is viewed. Recommended for stores with a lot of variations.', 'konekt-merit-aktiva' ),
+			],
+
 			'sync_all_products' => [
 				'title' => __( 'Sync products', 'konekt-merit-aktiva' ),
 				'type'  => 'manual-product'
@@ -305,15 +313,15 @@ class Integration extends \WC_Integration {
 
 			if ( ! empty( $taxes ) ) {
 				$taxes = array_column( (array) $taxes, 'Code', 'Id' );
-
-				$this->get_plugin()->set_cache( 'taxes', $taxes, MONTH_IN_SECONDS );
 			} else {
 				$taxes = [];
 			}
 
+			$this->get_plugin()->set_cache( 'taxes', $taxes, MONTH_IN_SECONDS );
+
 		}
 
-		return $taxes;
+		return $taxes ?? [];
 	}
 
 

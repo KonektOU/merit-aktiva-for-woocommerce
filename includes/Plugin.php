@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.4.3';
+	const VERSION = '1.0.4.4';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -252,7 +252,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	public function get_product_meta( \WC_Product $product, $meta_key ) {
 
-		return $product->get_meta( $this->get_order_meta_key( $meta_key ), true );
+		return $product ? $product->get_meta( $this->get_order_meta_key( $meta_key ), true ) : null;
 	}
 
 
