@@ -257,6 +257,10 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 
 	public function attach_product_quantities_by_warehouse( $quantities, $product ) {
+		if ( ! $product ) {
+			return [];
+		}
+
 		$quantities = $this->get_product_meta( $product, 'quantities_by_warehouse' );
 
 		if ( empty( $quantities ) ) {
