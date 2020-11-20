@@ -103,6 +103,14 @@ class Integration extends \WC_Integration {
 				'description' => __( 'This determines which order status is needed to be sent to Merit Aktiva', 'konekt-merit-aktiva' ),
 			],
 
+			'invoice_sync_onhold' => [
+				'title'   => __( 'On-hold sync', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Sync orders with on-hold status.', 'konekt-merit-aktiva' ),
+			],
+
 			'invoice_shipping_sku' => [
 				'title'       => __( 'Shipping SKU', 'konekt-merit-aktiva' ),
 				'type'        => 'text',

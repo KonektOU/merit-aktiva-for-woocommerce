@@ -27,6 +27,9 @@ class Orders {
 			// Maybe create invoice when order status is okay
 			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
 
+			// Refund orders when needed
+			add_action( 'woocommerce_order_refunded', array( $this, 'refund_order' ), 20, 2 );
+
 			// Show order item warehouse location
 			add_action( 'woocommerce_after_order_itemmeta', array( $this, 'show_warehouse_name' ), 10, 2 );
 		}
@@ -94,11 +97,20 @@ class Orders {
 			return;
 		}
 
-		if ( $order_new_status !== $this->integration->get_option( 'invoice_sync_status', 'processing' ) ) {
-			return;
-		}
+		if ( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) || ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) ) {
+			$this->get_api()->create_invoice( $order );
 
-		$this->get_api()->create_invoice( $order );
+		} elseif ( 'refunded' === $order_new_status ) {
+			//
+		}
+	}
+
+
+	public function refund_order( $order_id, $refund_id ) {
+		$order  = wc_get_order( $order_id );
+		$refund = new \WC_Order_Refund( $refund_id );
+
+		$this->get_api()->create_invoice( $order, false, $refund );
 	}
 
 

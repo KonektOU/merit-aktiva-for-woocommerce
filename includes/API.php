@@ -62,10 +62,12 @@ class API extends Framework\SV_WC_API_Base {
 	 * Create invoice
 	 *
 	 * @param \WC_Order $order
+	 * @param bool $set_default_location
+	 * @param null|\WC_Order_Refund $refund
 	 *
 	 * @return bool
 	 */
-	public function create_invoice( $order, $set_default_location = false ) {
+	public function create_invoice( $order, $set_default_location = false, $refund = null ) {
 
 		// Support for "Estonian Banklinks for WooCommerce"
 		$reference_number = $order->get_meta( '_wc_estonian_banklinks_reference_number', true );
@@ -74,16 +76,31 @@ class API extends Framework\SV_WC_API_Base {
 			$reference_number = $this->generate_reference_number( $order->get_id() );
 		}
 
-		$order_items = [];
-		$tax_items   = [];
-		$tax_amount  = [];
+		$order_items      = [];
+		$tax_items        = [];
+		$tax_amount       = [];
+		$is_full_refund   = false;
+		$order_line_items = [];
 
 		// Look for location code from shipping method
 		$location_code = $this->get_plugin()->get_order_warehouse_id( $order );
 
+		// Get order items
+		if ( $refund ) {
+			$order_line_items = $refund->get_items( [ 'line_item', 'shipping' ] );
+		}
+
+		if ( empty( $order_line_items ) && $refund && abs( $refund->get_total( 'edit' ) ) == $order->get_total( 'edit' ) ) {
+			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
+			$is_full_refund   = true;
+		}
+		elseif ( empty( $order_line_items ) ) {
+			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
+		}
+
 		// Add order items
 		/** @var \WC_Order_Item_Product $order_item */
-		foreach ( $order->get_items( [ 'line_item', 'shipping' ] ) as $order_item ) {
+		foreach ( $order_line_items as $order_item ) {
 
 			$order_row = [
 				'Item' => [
@@ -135,10 +152,18 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['Item']['Type'] = self::ITEM_TYPE_SERVICE;
 			}
 
+			if ( $refund ) {
+				$order_row['ItemCostAmount'] = $order_row['Price'];
+
+				if ( (float) $order_row['Quantity'] > 0 ) {
+					$order_row['Quantity'] = $this->format_number( 0 - (float) $order_row['Quantity'] );
+				}
+			}
+
 			$order_items[] = $order_row;
 			$tax_items[]   = [
 				'TaxId'  => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
-				'Amount' => $this->format_number( $order_item->get_total_tax( 'edit' ) ),
+				'Amount' => $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) ),
 			];
 		}
 
@@ -166,6 +191,16 @@ class API extends Framework\SV_WC_API_Base {
 			];
 		}
 
+		if ( $refund ) {
+			if ( $is_full_refund ) {
+				$total_amount = $this->format_number( 0 - $order->get_total( 'edit' ) + $order->get_total_tax( 'edit' ) );
+			} else {
+				$total_amount = $this->format_number( $refund->get_total( 'edit' ) - $refund->get_total_tax( 'edit' ) );
+			}
+		} else {
+			$total_amount = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) );
+		}
+
 		// Prepare invoice data
 		$invoice = [
 			// Customer data
@@ -181,12 +216,12 @@ class API extends Framework\SV_WC_API_Base {
 			// Invoice data
 			'DocDate'         => $order->get_date_created()->format( 'YmdHis' ),
 			'RefNo'           => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_reference_number', $reference_number ),
-			'InvoiceNo'       => $order->get_order_number(),
+			'InvoiceNo'       => ( $refund ? 'C' : '' ) . $order->get_order_number(),
 			'CurrencyCode'    => $order->get_currency(),
 
 			// Invoice rows
 			'InvoiceRow'      => $order_items,
-			'TotalAmount'     => $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) ),
+			'TotalAmount'     => $total_amount,
 			'TaxAmount'       => $tax_items,
 
 			// Additional information
@@ -226,11 +261,17 @@ class API extends Framework\SV_WC_API_Base {
 				'customer_id' => $response->CustomerId,
 			] );
 
+			if ( $refund ) {
+				$message = __( 'Created refund invoice with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
+			} else {
+				$message = __( 'Created invoice with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
+			}
+
 			// Add order note
 			$this->get_plugin()->add_order_note(
 				$order,
 				sprintf(
-					__( 'Created invoice with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' ),
+					$message,
 					$response->InvoiceId,
 					$response->CustomerId
 				)
