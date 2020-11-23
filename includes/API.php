@@ -381,6 +381,21 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	public function get_products_in_warehouse( $warehouse_id ) {
+
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'path' => 'getitems',
+				'data' => [
+					'LocationCode' => $warehouse_id,
+				],
+			] )
+		);
+
+		return empty( $request ) ? null : $request->response_data;
+	}
+
+
 	/**
 	 * Format number
 	 *
