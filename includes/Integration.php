@@ -17,6 +17,12 @@ class Integration extends \WC_Integration {
 	protected $api = null;
 
 
+	protected $orders = null;
+
+
+	public $cron_started = false;
+
+
 	/**
 	 * Integration constructor
 	 */
@@ -193,12 +199,15 @@ class Integration extends \WC_Integration {
 				'description' => __( 'How often (in days) product data is fetched from API?', 'konekt-merit-aktiva' )
 			],
 
-			'sync_in_product_only' => [
-				'title'   => __( 'Sync timing', 'konekt-merit-aktiva' ),
-				'type'    => 'checkbox',
-				'default' => 'no',
-				'value'   => 'yes',
-				'label'   => __( 'When selected, product sync will only be executed when the product is viewed. Recommended for stores with a lot of variations.', 'konekt-merit-aktiva' ),
+			'sync_method' => [
+				'title'   => __( 'Sync method', 'konekt-merit-aktiva' ),
+				'type'    => 'select',
+				'default' => 'on-demand',
+				'options' => [
+					'on-demand' => __( 'On demand', 'konekt-merit-aktiva' ),
+					'relative'  => __( 'Relative', 'konekt-merit-aktiva' ),
+					'cron'      => __( 'Cron twice daily', 'konekt-merit-aktiva' ),
+				]
 			],
 
 			'sync_all_products' => [
@@ -212,7 +221,7 @@ class Integration extends \WC_Integration {
 			$this->form_fields['sync_all_products'] = [
 				'title'       => __( 'Sync products', 'konekt-merit-aktiva' ),
 				'type'        => 'manual_product_sync',
-				'description' => __( 'Creates an invoice with all products on the invoice and then deletes the invoice. The result is that you have all the products in Merit Aktiva. Products without SKU will be skipped.', 'konekt-merit-aktiva' ),
+				'description' => __( 'Manual sync for product stocks.', 'konekt-merit-aktiva' ),
 			];
 
 			// Taxes
@@ -230,81 +239,152 @@ class Integration extends \WC_Integration {
 
 
 	public function init() {
-		if ( ! empty( $_GET['action'] ) && 'create-products' === $_GET['action'] ) {
-			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], 'create-products' ) ) {
-				if ( did_action( $this->get_plugin()->get_id() . '_create-products' ) ) {
+		$this->schedule_cron();
+
+		if ( ! empty( $_GET['action'] ) && 'sync-products' === $_GET['action'] ) {
+			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], 'sync-products' ) ) {
+				if ( did_action( $this->get_plugin()->get_id() . '_sync-products' ) ) {
 					return;
 				}
 
-				do_action( $this->get_plugin()->get_id() . '_create-products' );
+				do_action( $this->get_plugin()->get_id() . '_sync-products' );
 
-				$current_page = absint( wc_get_var( $_GET['page'], 1 ) );
-				$order        = wc_create_order( [
-					'status' => 'on-hold',
-				] );
-				$products     = wc_get_products( [
-					'limit'    => 500,
-					'paginate' => true,
-					'page'     => $current_page,
-				] );
+				$this->get_plugin()->log( 'Starting manual sync' );
 
-				foreach ( $products->products as $product ) {
-					if ( $product->is_type( 'variable' ) ) {
-						foreach ( $product->get_children() as $variation_id ) {
-							$variation_product = wc_get_product( $variation_id );
+				wp_schedule_single_event( time(), 'konekt_merit_aktiva_cron_job' );
+			}
+		}
 
-							if ( ! $variation_product->get_sku() ) {
-								continue;
-							}
+		$this->orders = $this->get_orders();
+	}
 
-							if ( ! $variation_product->managing_stock() ) {
-								$variation_product->set_manage_stock( true );
-								$variation_product->save();
-							}
 
-							$order->add_product( $variation_product, 1 );
-						}
-					} else {
-						if ( ! $product->get_sku() ) {
-							continue;
-						}
+	public function schedule_cron() {
 
-						if ( ! $product->managing_stock() ) {
-							$product->set_manage_stock( true );
-							$product->save();
-						}
+		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
+			if ( ! wp_next_scheduled( 'konekt_merit_aktiva_cron_job' ) ) {
+				wp_schedule_event( time(), 'twicedaily', 'konekt_merit_aktiva_cron_job' );
+			}
 
-						$order->add_product( $product, 1 );
+			add_action( 'konekt_merit_aktiva_cron_job', array( $this, 'cron_hook' ) );
+		} else {
+			wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job' );
+		}
+
+	}
+
+
+	public function cron_hook() {
+
+		$this->get_plugin()->log( 'Starting cron' );
+
+		$this->cron_started = true;
+
+		$time_start = microtime( true );
+
+		$this->update_warehouse_products( true );
+
+		$warehouses = $this->get_warehouses();
+
+		foreach ( $warehouses as $warehouse ) {
+			$products_in_warehouse = $this->get_warehouse_products( $warehouse['id'] );
+
+			foreach ( $products_in_warehouse as $product_sku => $product_data ) {
+				$product = null;
+
+				if ( ! empty( $product_data->ProductId ) ) {
+					$product_by_id = wc_get_product( $product_data->ProductId );
+
+					if ( $product_by_id ) {
+						$product = $product_by_id;
 					}
 				}
 
-				$customer = new \WC_Customer( get_current_user_id() );
+				if ( ! $product ) {
+					$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
 
-				$order->set_billing_address_1( $customer->get_billing_address_1() );
-				$order->set_billing_address_2( $customer->get_billing_address_2() );
-				$order->set_billing_country( $customer->get_billing_country() );
-
-				$order->set_customer_id( get_current_user_id() );
-				$order->calculate_totals();
-				$order->save();
-
-				// Create invoice to Aktiva to save the products
-				$this->get_api()->create_invoice( $order, true );
-
-				// Delete invoice from Aktiva, and order from WC
-				$this->get_api()->delete_invoice( $order->get_id() );
-				$order->delete( true );
-
-				if ( $products->max_num_pages > 1 && $current_page < $products->max_num_pages ) {
-					wp_safe_redirect( add_query_arg( [
-						'page'   => $current_page + 1,
-						'action' => 'create-products',
-						'nonce'  => wp_create_nonce( 'create-products' ),
-					], $this->get_plugin()->get_settings_url() ) );
-				} else {
-					wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
+					if ( $product_id_by_sku ) {
+						$product = wc_get_product( $product_id_by_sku );
+					}
 				}
-				exit;
+			}
+		}
+
+		$time_end = microtime( true );
+
+		$this->cron_started = false;
+
+		$this->get_plugin()->log( sprintf( 'Ending cron: %s sec duration', ( $time_end - $time_start ) ) );
+
+	}
+
+
+	public function get_product_id_by_sku( $product_sku ) {
+		$product  = null;
+		$products = wc_get_products( [
+			'sku'    => $product_sku,
+			'limit'  => 1,
+			'type'   => array_merge( [ 'variation' ], wc_get_product_types() ),   // also search for variations
+			'return' => 'ids',
+		] );
+
+		if ( $products && 1 === count( $products ) ) {
+			$product = reset( $products );
+		}
+
+		return $product;
+	}
+
+
+	public function get_warehouse_products( $warehouse_id ) {
+		return $this->get_plugin()->get_cache( 'warehouse_' . $warehouse_id );
+	}
+
+
+	public function update_warehouse_products( $clear_cache = false ) {
+		$warehouses = $this->get_warehouses();
+
+		foreach ( $warehouses as $warehouse ) {
+
+			if ( true === $clear_cache ) {
+				$products_in_warehouse = false;
+			} else {
+				$products_in_warehouse = $this->get_warehouse_products( $warehouse['id'] );
+			}
+
+			if ( false === $products_in_warehouse ) {
+				$api_products = $this->get_api()->get_products_in_warehouse( $warehouse['id'] );
+				$cleaned_data = [];
+
+				if ( $api_products ) {
+					foreach ( $api_products as $product ) {
+						if ( empty( $product->Code ) ) {
+							continue;
+						}
+
+						$product_sku = trim( $product->Code );
+
+						if ( array_key_exists( $product_sku, $cleaned_data ) ) {
+							continue;
+						}
+
+						$this->get_plugin()->delete_cache( 'item_stock_' . $product_sku . '@' . $warehouse['id'] );
+
+						$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
+						$product_data      = [
+							'Type'         => $product->Type,
+							'InventoryQty' => $product->InventoryQty,
+						];
+
+						if ( $product_id_by_sku ) {
+							$product_data['ProductID'] = $product_id_by_sku;
+						}
+
+						$cleaned_data[ $product_sku ] = (object) $product_data;
+					}
+				}
+
+				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
 			}
 		}
 	}
@@ -468,7 +548,7 @@ class Integration extends \WC_Integration {
 			</th>
 			<td class="forminp">
 				<fieldset>
-					<a href="<?php echo esc_url( add_query_arg( [ 'nonce' => wp_create_nonce( 'create-products' ), 'action' => 'create-products' ] ) ) ?>" class="button"><?php echo esc_html_e( 'Create products', 'konekt-merit-aktiva' ); ?></a>
+					<a href="<?php echo esc_url( add_query_arg( [ 'nonce' => wp_create_nonce( 'sync-products' ), 'action' => 'sync-products' ] ) ) ?>" class="button"><?php echo esc_html_e( 'Sync products', 'konekt-merit-aktiva' ); ?></a>
 					<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
 				</fieldset>
 			</td>
@@ -623,6 +703,16 @@ class Integration extends \WC_Integration {
 		}
 
 		return $tax;
+	}
+
+
+	public function get_orders() {
+
+		if ( null === $this->orders ) {
+			$this->orders = new Orders( $this );
+		}
+
+		return $this->orders;
 	}
 
 

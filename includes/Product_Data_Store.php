@@ -15,8 +15,12 @@ class Product_Data_Store {
 
 	public function read( $product ) {
 
-		if ( 'no' === $this->get_integration()->get_option( 'sync_in_product_only' ) || is_product() ) {
-			$this->update_all_products_array();
+		$sync_method = $this->get_integration()->get_option( 'sync_method' );
+
+		if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) ) {
+			$this->get_integration()->update_warehouse_products();
+
+			$this->get_plugin()->log( 'reading' );
 
 			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
 				$this->refetch_product_stock( $product );
@@ -29,37 +33,8 @@ class Product_Data_Store {
 	}
 
 
-	public function update_all_products_array() {
-		$warehouses = $this->get_integration()->get_warehouses();
-
-		foreach ( $warehouses as $warehouse ) {
-			$products_in_warehouse = $this->get_plugin()->get_cache( 'warehouse_' . $warehouse['id'] );
-
-			if ( false === $products_in_warehouse ) {
-				$api_products = $this->get_api()->get_products_in_warehouse( $warehouse['id'] );
-				$cleaned_data = [];
-
-				if ( $api_products ) {
-					foreach ( $api_products as $product ) {
-						if ( empty( $product->Code ) ) {
-							continue;
-						}
-
-						$cleaned_data[ $product->Code ] = (object) [
-							'Type'         => $product->Type,
-							'InventoryQty' => $product->InventoryQty,
-						];
-					}
-				}
-
-				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
-			}
-		}
-	}
-
-
 	public function get_product_from_warehouse( $product_sku, $warehouse_id ) {
-		$all_products = $this->get_plugin()->get_cache( 'warehouse_' . $warehouse_id );
+		$all_products = $this->get_integration()->get_warehouse_products( $warehouse_id );
 		$product      = null;
 
 		if ( $all_products ) {
@@ -79,21 +54,34 @@ class Product_Data_Store {
 	 *
 	 * @return void
 	 */
-	private function refetch_product_stock( &$product ) {
+	public function refetch_product_stock( &$product ) {
 		$warehouses     = $this->get_integration()->get_warehouses();
 		$quantities     = [];
 		$total_quantity = 0;
+
+		$this->get_plugin()->log( 'Reading product' );
 
 		foreach ( $warehouses as $warehouse ) {
 
 			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse['id'] );
 
-			if ( false !== $this->get_plugin()->get_cache( $stock_cache_key ) ) {
+			if ( did_action( 'konekt_merit_aktiva_cron_job' ) ) {
+				$stock_cache = false;
+			} else {
+				$stock_cache = $this->get_plugin()->get_cache( $stock_cache_key );
+			}
+
+			if ( false !== $stock_cache ) {
 				$quantities = null;
 
 				break;
 			} else {
 				$item_stock = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
+
+				if ( $product->get_sku() == 'BL-ICON-KAR-39' ) {
+					$this->get_plugin()->log( print_r( $item_stock, true ) );
+					$this->get_plugin()->log( 'warehouse: ' . $warehouse['id'] );
+				}
 
 				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
 
@@ -121,8 +109,6 @@ class Product_Data_Store {
 						'quantity' => wc_stock_amount( $item_stock->InventoryQty ),
 					];
 				}
-
-
 			}
 		}
 
@@ -134,6 +120,8 @@ class Product_Data_Store {
 					'quantities_by_warehouse' => $quantities
 				]
 			);
+
+			$this->get_plugin()->log( print_r( $quantities, true ) );
 
 			if ( $total_quantity != $product->get_stock_quantity() ) {
 				$product->set_stock_quantity( $total_quantity );

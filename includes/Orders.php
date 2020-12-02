@@ -140,7 +140,7 @@ class Orders {
 	 * @return Konekt\WooCommerce\Merit_Aktiva\API
 	 */
 	protected function get_api() {
-		return $this->get_plugin()->get_integration()->get_api();
+		return $this->integration->get_api();
 	}
 
 
