@@ -20,8 +20,6 @@ class Product_Data_Store {
 		if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) ) {
 			$this->get_integration()->update_warehouse_products();
 
-			$this->get_plugin()->log( 'reading' );
-
 			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
 				$this->refetch_product_stock( $product );
 			}
@@ -59,8 +57,6 @@ class Product_Data_Store {
 		$quantities     = [];
 		$total_quantity = 0;
 
-		$this->get_plugin()->log( 'Reading product' );
-
 		foreach ( $warehouses as $warehouse ) {
 
 			$stock_cache_key = $this->get_stock_cache_key( $product->get_sku(), $warehouse['id'] );
@@ -78,11 +74,6 @@ class Product_Data_Store {
 			} else {
 				$item_stock = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
 
-				if ( $product->get_sku() == 'BL-ICON-KAR-39' ) {
-					$this->get_plugin()->log( print_r( $item_stock, true ) );
-					$this->get_plugin()->log( 'warehouse: ' . $warehouse['id'] );
-				}
-
 				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
 
 				if ( empty( $item_stock ) ) {
@@ -97,9 +88,7 @@ class Product_Data_Store {
 					break;
 				}
 
-				if ( ! $product->managing_stock() ) {
-					$product->set_manage_stock( true );
-				}
+				$product->set_manage_stock( true );
 
 				if ( $item_stock->InventoryQty ) {
 					$total_quantity += (int) $item_stock->InventoryQty;
@@ -120,8 +109,6 @@ class Product_Data_Store {
 					'quantities_by_warehouse' => $quantities
 				]
 			);
-
-			$this->get_plugin()->log( print_r( $quantities, true ) );
 
 			if ( $total_quantity != $product->get_stock_quantity() ) {
 				$product->set_stock_quantity( $total_quantity );

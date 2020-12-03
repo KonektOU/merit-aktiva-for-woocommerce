@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.6';
+	const VERSION = '1.0.7';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -86,9 +86,6 @@ class Plugin extends Framework\SV_WC_Plugin {
 		// Add custom data store
 		add_filter( 'woocommerce_data_stores', array( $this, 'load_product_data_store' ) );
 
-		// Add shipping method
-		add_filter( 'woocommerce_shipping_methods', array( $this, 'load_shipping_method' ) );
-
 		// Custom hook
 		add_filter( self::PLUGIN_ID . '_product_quantities_by_warehouse', array( $this, 'attach_product_quantities_by_warehouse' ), 10, 2 );
 		add_filter( self::PLUGIN_ID . '_warehouse_title', array( $this, 'attach_warehouse_title' ), 10, 2 );
@@ -132,27 +129,6 @@ class Plugin extends Framework\SV_WC_Plugin {
 		$stores['product-variation'] = new Data_Stores\Product_Variation( new $base_store ) ;
 
 		return $stores;
-	}
-
-
-	/**
-	 * Load shipping method
-	 *
-	 * @param array $methods
-	 *
-	 * @since 1.0.2
-	 *
-	 * @return array
-	 */
-	public function load_shipping_method( $methods = [] ) {
-
-		if ( ! class_exists( self::SHIPPING_CLASS ) ) {
-			require_once( $this->get_plugin_path() . '/includes/Shipping_Method.php' );
-		}
-
-		$methods[ self::SHIPPING_METHOD_ID ] = self::SHIPPING_CLASS;
-
-		return $methods;
 	}
 
 

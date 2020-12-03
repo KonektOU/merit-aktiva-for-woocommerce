@@ -20,9 +20,6 @@ class Integration extends \WC_Integration {
 	protected $orders = null;
 
 
-	public $cron_started = false;
-
-
 	/**
 	 * Integration constructor
 	 */
@@ -38,6 +35,7 @@ class Integration extends \WC_Integration {
 		// Bind to the save action for the settings.
 		add_action( 'woocommerce_update_options_integration_' . $this->id, [ $this, 'process_admin_options' ] );
 		add_action( 'init', array( $this, 'init' ) );
+		add_action( 'admin_init', array( $this, 'admin_init' ) );
 
 		if ( $this->have_api_credentials() ) {
 			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
@@ -241,6 +239,14 @@ class Integration extends \WC_Integration {
 	public function init() {
 		$this->schedule_cron();
 
+		$this->orders = $this->get_orders();
+
+		// Add shipping method
+		add_filter( 'woocommerce_shipping_methods', array( $this, 'load_shipping_method' ) );
+	}
+
+
+	public function admin_init() {
 		if ( ! empty( $_GET['action'] ) && 'sync-products' === $_GET['action'] ) {
 			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], 'sync-products' ) ) {
 				if ( did_action( $this->get_plugin()->get_id() . '_sync-products' ) ) {
@@ -254,8 +260,31 @@ class Integration extends \WC_Integration {
 				wp_schedule_single_event( time(), 'konekt_merit_aktiva_cron_job' );
 			}
 		}
+	}
 
-		$this->orders = $this->get_orders();
+
+	/**
+	 * Load shipping method
+	 *
+	 * @param array $methods
+	 *
+	 * @since 1.0.2
+	 *
+	 * @return array
+	 */
+	public function load_shipping_method( $methods = [] ) {
+
+		if ( empty( $this->get_warehouses() ) ) {
+			return $methods;
+		}
+
+		if ( ! class_exists( $this->get_plugin()::SHIPPING_CLASS ) ) {
+			require_once( $this->get_plugin()->get_plugin_path() . '/includes/Shipping_Method.php' );
+		}
+
+		$methods[ $this->get_plugin()::SHIPPING_METHOD_ID ] = $this->get_plugin()::SHIPPING_CLASS;
+
+		return $methods;
 	}
 
 
@@ -278,41 +307,21 @@ class Integration extends \WC_Integration {
 
 		$this->get_plugin()->log( 'Starting cron' );
 
-		$this->cron_started = true;
+		$time_start  = microtime( true );
+		$product_ids = $this->update_warehouse_products( true );
 
-		$time_start = microtime( true );
+		if ( ! empty( $product_ids ) ) {
+			$this->get_plugin()->log( 'Fetching products for an update.' );
 
-		$this->update_warehouse_products( true );
-
-		$warehouses = $this->get_warehouses();
-
-		foreach ( $warehouses as $warehouse ) {
-			$products_in_warehouse = $this->get_warehouse_products( $warehouse['id'] );
-
-			foreach ( $products_in_warehouse as $product_sku => $product_data ) {
-				$product = null;
-
-				if ( ! empty( $product_data->ProductId ) ) {
-					$product_by_id = wc_get_product( $product_data->ProductId );
-
-					if ( $product_by_id ) {
-						$product = $product_by_id;
-					}
-				}
-
-				if ( ! $product ) {
-					$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
-
-					if ( $product_id_by_sku ) {
-						$product = wc_get_product( $product_id_by_sku );
-					}
-				}
-			}
+			wc_get_products( [
+				'include' => $product_ids,
+				'type'    => array_merge( [ 'variation' ], wc_get_product_types() ),
+				'return'  => 'objects',
+				'limit'   => -1,
+			] );
 		}
 
 		$time_end = microtime( true );
-
-		$this->cron_started = false;
 
 		$this->get_plugin()->log( sprintf( 'Ending cron: %s sec duration', ( $time_end - $time_start ) ) );
 
@@ -342,7 +351,8 @@ class Integration extends \WC_Integration {
 
 
 	public function update_warehouse_products( $clear_cache = false ) {
-		$warehouses = $this->get_warehouses();
+		$warehouses  = $this->get_warehouses();
+		$product_ids = [];
 
 		foreach ( $warehouses as $warehouse ) {
 
@@ -353,6 +363,8 @@ class Integration extends \WC_Integration {
 			}
 
 			if ( false === $products_in_warehouse ) {
+				$this->get_plugin()->log( sprintf( 'Updating products source data in warehouse %s (%s)', $warehouse['title'], $warehouse['id'] ) );
+
 				$api_products = $this->get_api()->get_products_in_warehouse( $warehouse['id'] );
 				$cleaned_data = [];
 
@@ -377,7 +389,9 @@ class Integration extends \WC_Integration {
 						];
 
 						if ( $product_id_by_sku ) {
+							// Just init product so it will be updated
 							$product_data['ProductID'] = $product_id_by_sku;
+							$product_ids []            = $product_id_by_sku;
 						}
 
 						$cleaned_data[ $product_sku ] = (object) $product_data;
@@ -387,6 +401,8 @@ class Integration extends \WC_Integration {
 				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
 			}
 		}
+
+		return $product_ids;
 	}
 
 
