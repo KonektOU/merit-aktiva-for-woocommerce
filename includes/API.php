@@ -131,6 +131,25 @@ class API extends Framework\SV_WC_API_Base {
 				// Attach warehouse
 				if ( null !== $location_code ) {
 					$order_row['LocationCode'] = $location_code;
+				} else {
+					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+					$warehouse_key      = null;
+
+					foreach ( $this->integration->get_warehouses() as $warehouse ) {
+						if ( ! $warehouse['id'] ) {
+							continue;
+						}
+
+						$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
+
+						if ( false !== $warehouse_key ) {
+							if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
+								$order_row['Item']['LocationCode'] = $warehouse['id'];
+
+								break;
+							}
+						}
+					}
 				}
 
 				if ( true === $set_default_location ) {
