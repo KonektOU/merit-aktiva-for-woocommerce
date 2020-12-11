@@ -144,7 +144,7 @@ class API extends Framework\SV_WC_API_Base {
 
 						if ( false !== $warehouse_key ) {
 							if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
-								$order_row['Item']['LocationCode'] = $warehouse['id'];
+								$order_row['LocationCode'] = $warehouse['id'];
 
 								break;
 							}

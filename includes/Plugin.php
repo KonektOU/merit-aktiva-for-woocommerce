@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.7.1';
+	const VERSION = '1.0.7.2';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
