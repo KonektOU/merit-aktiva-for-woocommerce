@@ -207,11 +207,6 @@ class Integration extends \WC_Integration {
 					'cron'      => __( 'Cron twice daily', 'konekt-merit-aktiva' ),
 				]
 			],
-
-			'sync_all_products' => [
-				'title' => __( 'Sync products', 'konekt-merit-aktiva' ),
-				'type'  => 'manual-product'
-			]
 		];
 
 		if ( $this->have_api_credentials() ) {
