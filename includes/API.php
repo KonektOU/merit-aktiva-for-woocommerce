@@ -307,8 +307,10 @@ class API extends Framework\SV_WC_API_Base {
 				__( 'Invoice generation failed.', 'konekt-merit-aktiva' )
 			);
 
-			if ( ! empty( $response->Message ) ) {
-				$this->get_plugin()->add_order_note( $order, $response->Message );
+			if ( 'yes' === $this->integration->get_option( 'save_api_messages_to_notes', 'no' ) ) {
+				if ( ! empty( $message = $response->Message ) ) {
+					$this->get_plugin()->add_order_note( $order, $message );
+				}
 			}
 		}
 

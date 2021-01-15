@@ -207,6 +207,14 @@ class Integration extends \WC_Integration {
 					'cron'      => __( 'Cron twice daily', 'konekt-merit-aktiva' ),
 				]
 			],
+
+			'save_api_messages_to_notes' => [
+				'title'   => __( 'Messages', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Save messages from API to order notes (privately).', 'konekt-merit-aktiva' ),
+			],
 		];
 
 		if ( $this->have_api_credentials() ) {
