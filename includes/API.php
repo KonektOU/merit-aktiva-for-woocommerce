@@ -251,7 +251,7 @@ class API extends Framework\SV_WC_API_Base {
 		];
 
 		// Payment data
-		if ( $order->is_paid() ) {
+		if ( $order->is_paid() && ! $refund ) {
 			$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
 			$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
 			$invoice['Payment']         = [
