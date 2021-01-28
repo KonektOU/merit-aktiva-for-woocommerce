@@ -55,7 +55,11 @@ class Orders {
 			if ( false === ( $api_order = $this->get_plugin()->get_cache( 'order_' . $item->get_order_id() ) ) ) {
 				$api_order = $this->get_api()->get_order( $item->get_order_id() );
 
-				$this->get_plugin()->set_cache( 'order_' . $item->get_order_id(), $api_order, HOUR_IN_SECONDS );
+				if ( $api_order->Lines ) {
+					$this->get_plugin()->set_cache( 'order_' . $item->get_order_id(), $api_order, HOUR_IN_SECONDS );
+				} else {
+					$api_order = null;
+				}
 			}
 
 			if ( $api_order ) {

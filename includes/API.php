@@ -165,6 +165,14 @@ class API extends Framework\SV_WC_API_Base {
 					$order_row['Price']          = $this->format_number( $order_item->get_subtotal( 'edit' ) );
 				}
 
+				$product_uom = $this->get_plugin()->get_product_meta( $product, 'uom_name' );
+
+				if ( $product_uom ) {
+					$order_row['Item']['UOMName'] = $product_uom;
+				} else {
+					$order_row['Item']['UOMName'] = 'tk';
+				}
+
 			} else {
 
 				$order_row['Item']['Code'] = $this->integration->get_option( 'invoice_shipping_sku' );
@@ -281,9 +289,9 @@ class API extends Framework\SV_WC_API_Base {
 			] );
 
 			if ( $refund ) {
-				$message = __( 'Created refund invoice with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
+				$message = __( 'Created refund invoice nr. %s with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
 			} else {
-				$message = __( 'Created invoice with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
+				$message = __( 'Created invoice no. %s with ID %s. Customer ID is %s.', 'konekt-merit-aktiva' );
 			}
 
 			// Add order note
@@ -291,6 +299,7 @@ class API extends Framework\SV_WC_API_Base {
 				$order,
 				sprintf(
 					$message,
+					$response->InvoiceNo,
 					$response->InvoiceId,
 					$response->CustomerId
 				)
@@ -315,6 +324,64 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		return 200 === $this->get_response_code();
+	}
+
+
+	public function create_products( $products ) {
+		do_action( 'konekt_merit_aktiva_create_products' );
+
+		$order = \wc_create_order( [
+			'status' => 'pending',
+		] );
+
+		foreach ( $products as $product ) {
+			if ( $product->is_type( 'variable' ) ) {
+				foreach ( $product->get_children() as $variation_id ) {
+					$variation_product = wc_get_product( $variation_id );
+
+					if ( ! $variation_product->get_sku() ) {
+						continue;
+					}
+
+					if ( ! $variation_product->managing_stock() ) {
+						$variation_product->set_manage_stock( true );
+						$variation_product->save();
+					}
+
+					$order->add_product( $variation_product, 1 );
+				}
+			} else {
+				if ( ! $product->get_sku() ) {
+					continue;
+				}
+
+				if ( ! $product->managing_stock() ) {
+					$product->set_manage_stock( true );
+					$product->save();
+				}
+
+				$order->add_product( $product, 1 );
+			}
+		}
+
+		$customer = new \WC_Customer( get_current_user_id() );
+
+		$order->set_billing_address_1( $customer->get_billing_address_1() );
+		$order->set_billing_address_2( $customer->get_billing_address_2() );
+		$order->set_billing_country( $customer->get_billing_country() );
+
+		$order->set_customer_id( get_current_user_id() );
+		$order->calculate_totals();
+		$order->save();
+
+		// Create invoice to Aktiva to save the products
+		$this->create_invoice( $order, true );
+
+		// Delete invoice from Aktiva
+		$this->delete_invoice( $order->get_id() );
+
+		// Delete WC order
+		$order->delete( true );
 	}
 
 

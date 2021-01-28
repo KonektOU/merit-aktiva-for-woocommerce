@@ -17,7 +17,7 @@ class Product_Data_Store {
 
 		$sync_method = $this->get_integration()->get_option( 'sync_method' );
 
-		if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) ) {
+		if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) || did_action( 'woocommerce_new_product' ) || did_action( 'woocommerce_update_product' ) ) {
 			$this->get_integration()->update_warehouse_products();
 
 			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
@@ -88,7 +88,14 @@ class Product_Data_Store {
 					break;
 				}
 
+				// Manage stock
 				$product->set_manage_stock( true );
+
+				// Save item ID
+				$this->get_plugin()->add_product_meta( $product, [
+					'item_id'  => $item_stock->ItemId,
+					'uom_name' => $item_stock->UnitofMeasureName,
+				] );
 
 				if ( $item_stock->InventoryQty ) {
 					$total_quantity += (int) $item_stock->InventoryQty;
@@ -135,17 +142,28 @@ class Product_Data_Store {
 	 */
 	private function refetch_product_data( &$product ) {
 
-		/*$item_cache_key = $this->get_item_cache_key( $product->get_sku() );
+		if ( did_action( 'konekt_merit_aktiva_create_products' ) ) {
+			return;
+		}
+
+		$item_cache_key = $this->get_item_cache_key( $product->get_sku() );
 
 		if ( false === ( $cached = $this->get_plugin()->get_cache( $item_cache_key ) ) ) {
-			$item = $this->get_api()->get_item( $product->get_sku() );
+			$item    = $this->get_api()->get_item( $product->get_sku() );
 
 			if ( $item ) {
 				// Update data
+			} else {
+				$this->get_api()->create_products( [ $product ] );
+
+				// Force refetching data
+				$item = null;
 			}
 
-			$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
-		}*/
+			if ( $item ) {
+				$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
+			}
+		}
 	}
 
 

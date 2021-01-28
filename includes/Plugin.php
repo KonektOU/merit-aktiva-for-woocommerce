@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.7.2';
+	const VERSION = '1.0.8';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -170,7 +170,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 * @return string
 	 */
 	public function get_order_meta_key( $meta_key ) {
-		return '_wc_' . $this->get_id() . '_' . $meta_key;
+		return $this->get_id() . '_' . $meta_key;
 	}
 
 

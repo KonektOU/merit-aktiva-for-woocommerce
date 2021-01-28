@@ -232,8 +232,9 @@ class Integration extends \WC_Integration {
 			];
 
 			$this->form_fields['taxes'] = [
-				'title' => __( 'Taxes', 'konekt-merit-aktiva' ),
-				'type'  => 'tax_mapping_table',
+				'title'       => __( 'Taxes', 'konekt-merit-aktiva' ),
+				'type'        => 'tax_mapping_table',
+				'description' => __( 'Match all WooCommerce taxes with Merit Aktiva taxes. You can find TaxId from Merit Aktiva settings.', 'konekt-merit-aktiva' ),
 			];
 		}
 	}
@@ -297,12 +298,13 @@ class Integration extends \WC_Integration {
 			if ( ! wp_next_scheduled( 'konekt_merit_aktiva_cron_job' ) ) {
 				wp_schedule_event( time(), 'twicedaily', 'konekt_merit_aktiva_cron_job' );
 			}
-
-			add_action( 'konekt_merit_aktiva_cron_job', array( $this, 'cron_hook' ) );
 		} else {
-			wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job' );
+			if ( ! did_action( $this->get_plugin()->get_id() . '_sync-products' ) ) {
+				wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job' );
+			}
 		}
 
+		add_action( 'konekt_merit_aktiva_cron_job', array( $this, 'cron_hook' ) );
 	}
 
 
@@ -387,8 +389,10 @@ class Integration extends \WC_Integration {
 
 						$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
 						$product_data      = [
-							'Type'         => $product->Type,
-							'InventoryQty' => $product->InventoryQty,
+							'Type'              => $product->Type,
+							'InventoryQty'      => $product->InventoryQty,
+							'ItemId'            => $product->ItemId,
+							'UnitofMeasureName' => $product->UnitofMeasureName,
 						];
 
 						if ( $product_id_by_sku ) {
@@ -611,39 +615,27 @@ class Integration extends \WC_Integration {
 
 					<thead>
 						<tr>
-							<th>#</th>
+							<th width="100">#</th>
+							<th><?php esc_html_e( 'WooCommerce Tax', 'konekt-merit-aktiva' ); ?></th>
 							<th><?php esc_html_e( 'Tax ID', 'konekt-merit-aktiva' ); ?></th>
-							<th><?php esc_html_e( 'Comment', 'konekt-merit-aktiva' ); ?></th>
-							<th><?php esc_html_e( 'Matching tax', 'konekt-merit-aktiva' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
 
-						<?php foreach ( $external_taxes as $external_tax_id => $tax_comment ) : ?>
+						<?php foreach ( $this->get_all_tax_rates() as $wc_tax_id => $wc_tax ) : ?>
 
 							<?php
 							$row_counter++;
 
-							$value = $values[$external_tax_id] ?? false;
+							$value = $values[$wc_tax_id] ?? false;
 							?>
 
 							<tr>
 								<td><?php echo $row_counter; ?>.</td>
-								<td><?php echo esc_html( $external_tax_id ); ?></td>
-								<td><?php echo esc_html( $tax_comment ); ?></td>
-								<td>
-									<select name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $external_tax_id ); ?>]" class="select">
-
-										<option value="0"></option>
-
-										<?php foreach ( $wc_taxes as $wc_tax_id => $wc_tax ) : ?>
-
-											<option value="<?php echo esc_attr( $wc_tax_id ); ?>" <?php selected( $wc_tax_id, $value, true ); ?>><?php echo esc_html( $wc_tax['label'] ); ?></option>
-
-										<?php endforeach; ?>
-									</select>
-								</td>
+								<td><?php echo esc_html( $wc_tax['label'] ); ?></td>
+								<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $wc_tax_id ); ?>]" value="<?php echo esc_attr( $value ); ?>"></td>
 							</tr>
+
 						<?php endforeach; ?>
 
 					</tbody>
@@ -712,12 +704,8 @@ class Integration extends \WC_Integration {
 		if ( $tax_rate_id ) {
 			$current_taxes = (array) $this->get_option( 'taxes', [] );
 
-			foreach ( $current_taxes as $tax_code => $wc_tax_id ) {
-				if ( $tax_rate_id == $wc_tax_id ) {
-					$tax = $tax_code;
-
-					break;
-				}
+			if ( array_key_exists( $tax_rate_id, $current_taxes ) ) {
+				return $current_taxes[ $tax_rate_id ];
 			}
 		}
 
