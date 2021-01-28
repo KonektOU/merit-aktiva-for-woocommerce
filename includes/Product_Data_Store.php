@@ -156,10 +156,12 @@ class Product_Data_Store {
 			if ( $item ) {
 				// Update data
 			} else {
-				$this->get_api()->create_products( [ $product ] );
+				if ( 'yes' === $this->get_integration()->get_option( 'product_create_allowed', 'no' ) ) {
+					$this->get_api()->create_products( [ $product ] );
 
-				// Force refetching data
-				$item = null;
+					// Force refetching data
+					$item = null;
+				}
 			}
 
 			if ( $item ) {

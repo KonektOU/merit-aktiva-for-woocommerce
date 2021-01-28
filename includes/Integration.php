@@ -177,6 +177,14 @@ class Integration extends \WC_Integration {
 				'label'   => __( 'Allow syncing product data with Merit Aktiva', 'konekt-merit-aktiva' ),
 			],
 
+			'product_create_allowed' => [
+				'title'   => __( 'Create products', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Allow creating products to Merit Aktiva.', 'konekt-merit-aktiva' ),
+			],
+
 			// Advanced
 			'advanced_section_title' => [
 				'title' => __( 'Advanced configuration', 'konekt-merit-aktiva' ),
