@@ -619,10 +619,11 @@ class Integration extends \WC_Integration {
 
 		$this->get_plugin()->log( 'Starting manual product creation' );
 
-		$args = [
+		$current_page = absint( wc_get_var( $_GET['current_page'], 1 ) );
+		$args         = [
 			'post_type'        => 'product',
-			'posts_per_page'   => -1,
-			'nopaging'         => true,
+			'posts_per_page'   => 1,
+			'paged'            => $current_page,
 			'suprress_filters' => false,
 			'fields'           => 'ids',
 			'post_status'      => [ 'publish' ],
@@ -668,6 +669,16 @@ class Integration extends \WC_Integration {
 						'uom_name' => $external_item->UnitofMeasureName,
 					] );
 				}
+			}
+
+			if ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) {
+				wp_safe_redirect( add_query_arg( [
+					'action' => 'create-products',
+					'nonce'  => wp_create_nonce( 'create-products' ),
+					'current_page'   => $current_page + 1,
+				], $this->get_plugin()->get_settings_url() ) );
+			} else {
+				wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 			}
 		} else {
 			$this->get_plugin()->log( 'Did not find any products' );
