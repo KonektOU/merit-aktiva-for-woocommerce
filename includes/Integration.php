@@ -646,12 +646,16 @@ class Integration extends \WC_Integration {
 
 		$query_products = new \WP_Query( $args );
 
-		if ( $query_products->posts ) {
+		if ( ! empty( $query_products->posts ) ) {
 			$products = array_map( 'wc_get_product', $query_products->posts );
 
-			$this->get_plugin()->log( print_r( $products, true ) );
+			// Create products
+			$this->get_api()->create_products( $products );
 
-			//$this->get_api()->create_products( $products );
+			// Sync stock
+			$this->manual_product_stock_sync();
+		} else {
+			$this->get_plugin()->log( 'Did not find any products' );
 		}
 	}
 
