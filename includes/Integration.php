@@ -227,10 +227,22 @@ class Integration extends \WC_Integration {
 
 		if ( $this->have_api_credentials() ) {
 
-			$this->form_fields['sync_all_products'] = [
-				'title'       => __( 'Sync products', 'konekt-merit-aktiva' ),
-				'type'        => 'manual_product_sync',
-				'description' => __( 'Manual sync for product stocks.', 'konekt-merit-aktiva' ),
+			$this->form_fields['sync_product_stock'] = [
+				'title'        => __( 'Sync stock', 'konekt-merit-aktiva' ),
+				'type'         => 'manual_product_sync',
+				'description'  => __( 'Manual sync for product stocks', 'konekt-merit-aktiva' ),
+				'nonce'        => 'sync-product-stock',
+				'button_title' => __( 'Sync now', 'konekt-merit-aktiva' ),
+				'callback'     => [ $this, 'manual_product_stock_sync' ],
+			];
+
+			$this->form_fields['create_products'] = [
+				'title'        => __( 'Create products', 'konekt-merit-aktiva' ),
+				'type'         => 'manual_product_sync',
+				'description'  => __( 'Create products to Merit Aktiva that are missing', 'konekt-merit-aktiva' ),
+				'nonce'        => 'create-products',
+				'button_title' => __( 'Create now', 'konekt-merit-aktiva' ),
+				'callback'     => [ $this, 'manual_product_sync' ],
 			];
 
 			// Taxes
@@ -259,19 +271,6 @@ class Integration extends \WC_Integration {
 
 
 	public function admin_init() {
-		if ( ! empty( $_GET['action'] ) && 'sync-products' === $_GET['action'] ) {
-			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], 'sync-products' ) ) {
-				if ( did_action( $this->get_plugin()->get_id() . '_sync-products' ) ) {
-					return;
-				}
-
-				do_action( $this->get_plugin()->get_id() . '_sync-products' );
-
-				$this->get_plugin()->log( 'Starting manual sync' );
-
-				wp_schedule_single_event( time(), 'konekt_merit_aktiva_cron_job' );
-			}
-		}
 	}
 
 
@@ -307,7 +306,7 @@ class Integration extends \WC_Integration {
 				wp_schedule_event( time(), 'twicedaily', 'konekt_merit_aktiva_cron_job' );
 			}
 		} else {
-			if ( ! did_action( $this->get_plugin()->get_id() . '_sync-products' ) ) {
+			if ( ! did_action( $this->get_plugin()->get_id() . '_sync-product-stock' ) ) {
 				wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job' );
 			}
 		}
@@ -567,9 +566,17 @@ class Integration extends \WC_Integration {
 			'desc_tip'          => false,
 			'description'       => '',
 			'custom_attributes' => array(),
+			'nonce'             => '',
+			'button_title'      => '',
 		);
 
 		$data = wp_parse_args( $data, $defaults );
+
+		if ( ! empty( $_GET['action'] ) && $data['nonce'] === $_GET['action'] ) {
+			if ( ! empty( $_GET['nonce'] ) && wp_verify_nonce( $_GET['nonce'], $data['nonce'] ) ) {
+				call_user_func( $data['callback'] );
+			}
+		}
 
 		ob_start();
 		?>
@@ -579,7 +586,7 @@ class Integration extends \WC_Integration {
 			</th>
 			<td class="forminp">
 				<fieldset>
-					<a href="<?php echo esc_url( add_query_arg( [ 'nonce' => wp_create_nonce( 'sync-products' ), 'action' => 'sync-products' ] ) ) ?>" class="button"><?php echo esc_html_e( 'Sync products', 'konekt-merit-aktiva' ); ?></a>
+					<a href="<?php echo esc_url( add_query_arg( [ 'nonce' => wp_create_nonce( $data['nonce'] ), 'action' => $data['nonce'] ] ) ) ?>" class="button"><?php echo esc_html( $data['button_title'] ); ?></a>
 					<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
 				</fieldset>
 			</td>
@@ -587,6 +594,65 @@ class Integration extends \WC_Integration {
 		<?php
 
 		return ob_get_clean();
+	}
+
+
+	public function manual_product_stock_sync() {
+		if ( did_action( $this->get_plugin()->get_id() . '_sync-product-stock' ) ) {
+			return;
+		}
+
+		do_action( $this->get_plugin()->get_id() . '_sync-product-stock' );
+
+		$this->get_plugin()->log( 'Starting manual sync' );
+
+		wp_schedule_single_event( time(), 'konekt_merit_aktiva_cron_job' );
+	}
+
+
+	public function manual_product_sync() {
+		if ( did_action( $this->get_plugin()->get_id() . '_create-products' ) ) {
+			return;
+		}
+
+		do_action( $this->get_plugin()->get_id() . '_create-products' );
+
+		$this->get_plugin()->log( 'Starting manual product creation' );
+
+		$args = [
+			'post_type'        => 'product',
+			'posts_per_page'   => -1,
+			'nopaging'         => true,
+			'suprress_filters' => false,
+			'fields'           => 'ids',
+			'meta_query'       => [
+				'relation' => 'AND',
+				[
+					'key'     => '_sku',
+					'value'   => '',
+					'compare' => '!=',
+				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+					'compare' => 'EXISTS',
+				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+					'value'   => '',
+					'compare' => '!=',
+				]
+			]
+		];
+
+		$query_products = new \WP_Query( $args );
+
+		if ( $query_products->posts ) {
+			$products = array_map( 'wc_get_product', $query_products->posts );
+
+			$this->get_plugin()->log( print_r( $products, true ) );
+
+			//$this->get_api()->create_products( $products );
+		}
 	}
 
 

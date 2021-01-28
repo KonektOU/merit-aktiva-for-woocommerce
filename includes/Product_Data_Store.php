@@ -151,7 +151,7 @@ class Product_Data_Store {
 		$item_cache_key = $this->get_item_cache_key( $product->get_sku() );
 
 		if ( false === ( $cached = $this->get_plugin()->get_cache( $item_cache_key ) ) ) {
-			$item    = $this->get_api()->get_item( $product->get_sku() );
+			$item = $this->get_api()->get_item( $product->get_sku() );
 
 			if ( $item ) {
 				// Update data
@@ -160,13 +160,11 @@ class Product_Data_Store {
 					$this->get_api()->create_products( [ $product ] );
 
 					// Force refetching data
-					$item = null;
+					$item = -1;
 				}
 			}
 
-			if ( $item ) {
-				$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
-			}
+			$this->get_plugin()->set_cache( $item_cache_key, $item, DAY_IN_SECONDS * intval( $this->get_integration()->get_option( 'product_refresh_rate', 30 ) ) );
 		}
 	}
 

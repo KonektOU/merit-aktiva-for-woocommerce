@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.8';
+	const VERSION = '1.0.8.1';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -169,7 +169,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 *
 	 * @return string
 	 */
-	public function get_order_meta_key( $meta_key ) {
+	public function get_meta_key( $meta_key ) {
 		return $this->get_id() . '_' . $meta_key;
 	}
 
@@ -187,11 +187,11 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		if ( is_array( $meta ) ) {
 			foreach ( $meta as $key => $value ) {
-				$product->update_meta_data( $this->get_order_meta_key( $key ), $value );
+				$product->update_meta_data( $this->get_meta_key( $key ), $value );
 			}
 
 		} else {
-			$product->update_meta_data( $this->get_order_meta_key( $meta ), $value );
+			$product->update_meta_data( $this->get_meta_key( $meta ), $value );
 		}
 
 		$product->save_meta_data();
@@ -200,7 +200,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	public function get_product_meta( \WC_Product $product, $meta_key ) {
 
-		return $product ? $product->get_meta( $this->get_order_meta_key( $meta_key ), true ) : null;
+		return $product ? $product->get_meta( $this->get_meta_key( $meta_key ), true ) : null;
 	}
 
 
@@ -283,11 +283,11 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		if ( is_array( $meta ) ) {
 			foreach ( $meta as $key => $value ) {
-				$order->update_meta_data( $this->get_order_meta_key( $key ), $value );
+				$order->update_meta_data( $this->get_meta_key( $key ), $value );
 			}
 
 		} else {
-			$order->update_meta_data( $this->get_order_meta_key( $meta ), $value );
+			$order->update_meta_data( $this->get_meta_key( $meta ), $value );
 		}
 
 		$order->save_meta_data();
@@ -305,7 +305,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 */
 	public function get_order_meta( \WC_Order $order, $meta_key ) {
 
-		return $order->get_meta( $this->get_order_meta_key( $meta_key ), true );
+		return $order->get_meta( $this->get_meta_key( $meta_key ), true );
 	}
 
 
