@@ -334,11 +334,18 @@ class API extends Framework\SV_WC_API_Base {
 	public function create_products( $products ) {
 		do_action( 'konekt_merit_aktiva_create_products' );
 
+		/**
+		 * @var \WC_Order
+		 */
 		$order = \wc_create_order( [
 			'status' => 'pending',
 		] );
 
 		foreach ( $products as $product ) {
+			if ( $product->is_type( 'external' ) ) {
+				continue;
+			}
+
 			if ( $product->is_type( 'variable' ) ) {
 				foreach ( $product->get_children() as $variation_id ) {
 					$variation_product = wc_get_product( $variation_id );
@@ -352,7 +359,10 @@ class API extends Framework\SV_WC_API_Base {
 						$variation_product->save();
 					}
 
-					$order->add_product( $variation_product, 1 );
+					$order->add_product( $variation_product, 1, [
+						'total'    => 0,
+						'subtotal' => 0,
+					] );
 				}
 			} else {
 				if ( ! $product->get_sku() ) {
@@ -364,7 +374,10 @@ class API extends Framework\SV_WC_API_Base {
 					$product->save();
 				}
 
-				$order->add_product( $product, 1 );
+				$order->add_product( $product, 1, [
+					'total'    => 0,
+					'subtotal' => 0,
+				] );
 			}
 		}
 

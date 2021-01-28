@@ -625,6 +625,7 @@ class Integration extends \WC_Integration {
 			'nopaging'         => true,
 			'suprress_filters' => false,
 			'fields'           => 'ids',
+			'post_status'      => [ 'publish' ],
 			'meta_query'       => [
 				'relation' => 'AND',
 				[
@@ -633,13 +634,16 @@ class Integration extends \WC_Integration {
 					'compare' => '!=',
 				],
 				[
-					'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-					'compare' => 'EXISTS',
-				],
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-					'value'   => '',
-					'compare' => '!=',
+					'relation' => 'OR',
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+						'compare' => 'NOT EXISTS',
+					],
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+						'value'   => '',
+						'compare' => '=',
+					]
 				]
 			]
 		];
@@ -652,8 +656,19 @@ class Integration extends \WC_Integration {
 			// Create products
 			$this->get_api()->create_products( $products );
 
+			do_action( 'konekt_merit_aktiva_created_products' );
+
 			// Sync stock
-			$this->manual_product_stock_sync();
+			foreach ( $products as $product ) {
+				$external_item = $this->get_api()->get_item( $product->get_sku() );
+
+				if ( $external_item ) {
+					$this->get_plugin()->add_product_meta( $product, [
+						'item_id'  => $external_item->ItemId,
+						'uom_name' => $external_item->UnitofMeasureName,
+					] );
+				}
+			}
 		} else {
 			$this->get_plugin()->log( 'Did not find any products' );
 		}
