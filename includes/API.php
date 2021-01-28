@@ -117,6 +117,10 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
 			}
 
+			if ( $order_item->get_total( 'edit' ) > 0 && $order_item->get_total_tax() == 0 ) {
+				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
+			}
+
 			if ( is_callable( array( $order_item, 'get_product' ) ) ) {
 
 				$product = $order_item->get_product();
@@ -189,7 +193,7 @@ class API extends Framework\SV_WC_API_Base {
 
 			$order_items[] = $order_row;
 			$tax_items[]   = [
-				'TaxId'  => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
+				'TaxId'  => $order_row['TaxId'],
 				'Amount' => $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) ),
 			];
 		}

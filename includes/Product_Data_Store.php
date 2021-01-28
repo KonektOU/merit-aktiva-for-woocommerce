@@ -15,17 +15,19 @@ class Product_Data_Store {
 
 	public function read( $product ) {
 
-		$sync_method = $this->get_integration()->get_option( 'sync_method' );
+		if ( $product->get_sku() ) {
+			$sync_method = $this->get_integration()->get_option( 'sync_method' );
 
-		if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) || did_action( 'woocommerce_new_product' ) || did_action( 'woocommerce_update_product' ) ) {
-			$this->get_integration()->update_warehouse_products();
+			if ( ( 'relative' === $sync_method ) || ( is_product() && 'on-demand' === $sync_method ) || ( 'cron' === $sync_method && did_action( 'konekt_merit_aktiva_cron_job' ) ) || did_action( 'woocommerce_new_product' ) || did_action( 'woocommerce_update_product' ) ) {
+				$this->get_integration()->update_warehouse_products();
 
-			if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
-				$this->refetch_product_stock( $product );
-			}
+				if ( 'yes' === $this->get_integration()->get_option( 'stock_sync_allowed', 'no' ) ) {
+					$this->refetch_product_stock( $product );
+				}
 
-			if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
-				$this->refetch_product_data( $product );
+				if ( 'yes' === $this->get_integration()->get_option( 'product_sync_allowed', 'no' ) ) {
+					$this->refetch_product_data( $product );
+				}
 			}
 		}
 	}

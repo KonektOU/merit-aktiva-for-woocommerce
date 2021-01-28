@@ -638,6 +638,12 @@ class Integration extends \WC_Integration {
 
 						<?php endforeach; ?>
 
+						<tr>
+							<td><?php echo $row_counter + 1; ?>.</td>
+							<td><?php echo esc_html_e( '0% tax', 'konekt-merit-aktiva' ); ?></td>
+							<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? false ); ?>"></td>
+						</tr>
+
 					</tbody>
 
 				</table>
@@ -692,12 +698,17 @@ class Integration extends \WC_Integration {
 		$tax         = '';
 		$tax_rate_id = '';
 
-		foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
+		if ( 0 === $wc_tax_class ) {
+			$tax_rate_id = 'none';
+		}
+		else {
+			foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
 
-			if ( $wc_tax_class == $rate['slug'] ) {
-				$tax_rate_id = $rate_id;
+				if ( $wc_tax_class == $rate['slug'] ) {
+					$tax_rate_id = $rate_id;
 
-				break;
+					break;
+				}
 			}
 		}
 
