@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.8.4';
+	const VERSION = '1.0.8.5';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -207,7 +207,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function remove_product_meta( \WC_Product $product, $meta_keys ) {
 
 		foreach ( $meta_keys as $meta_key ) {
-			$product->delete_meta_data( $meta_key );
+			$product->delete_meta_data( $this->get_meta_key( $meta_key ) );
 		}
 
 		$product->save_meta_data();
