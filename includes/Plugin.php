@@ -204,6 +204,16 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	public function remove_product_meta( \WC_Product $product, $meta_keys ) {
+
+		foreach ( $meta_keys as $meta_key ) {
+			$product->delete_meta_data( $meta_key );
+		}
+
+		$product->save_meta_data();
+	}
+
+
 	public function attach_product_quantities_by_warehouse( $quantities, $product ) {
 		if ( ! $product ) {
 			return [];

@@ -79,6 +79,8 @@ class Product_Data_Store {
 				$this->get_plugin()->set_cache( $stock_cache_key, $item_stock, MINUTE_IN_SECONDS * intval( $this->get_integration()->get_option( 'stock_refresh_rate', 15 ) ) );
 
 				if ( empty( $item_stock ) ) {
+					$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+
 					continue;
 				}
 
@@ -127,6 +129,8 @@ class Product_Data_Store {
 				$product->set_stock_status( 'instock' );
 			}
 
+		} else {
+			$this->get_plugin()->remove_product_meta( $product, [ 'quantities_by_warehouse' ] );
 		}
 
 		if ( ! empty( $product->get_changes() ) ) {

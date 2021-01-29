@@ -8,6 +8,8 @@
 
 namespace Konekt\WooCommerce\Merit_Aktiva;
 
+use WC_Admin_Notices;
+
 defined( 'ABSPATH' ) or exit;
 
 class Integration extends \WC_Integration {
@@ -42,6 +44,8 @@ class Integration extends \WC_Integration {
 				add_filter( 'woocommerce_product_tabs', array( $this, 'add_product_stock_tab' ) );
 			}
 		}
+
+		add_filter( 'woocommerce_product_data_store_cpt_get_products_query', array( $this, 'add_custom_product_query_var' ), 10, 2 );
 	}
 
 
@@ -617,58 +621,60 @@ class Integration extends \WC_Integration {
 
 		do_action( $this->get_plugin()->get_id() . '_create-products' );
 
-		$this->get_plugin()->log( 'Starting manual product creation' );
-
 		$current_page = absint( wc_get_var( $_GET['current_page'], 1 ) );
-		$args         = [
-			'post_type'        => 'product',
-			'posts_per_page'   => 1,
-			'paged'            => $current_page,
-			'suprress_filters' => false,
-			'fields'           => 'ids',
-			'post_status'      => [ 'publish' ],
-			'meta_query'       => [
-				'relation' => 'AND',
-				[
-					'key'     => '_sku',
-					'value'   => '',
-					'compare' => '!=',
-				],
-				[
-					'relation' => 'OR',
-					[
-						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-						'compare' => 'NOT EXISTS',
-					],
-					[
-						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-						'value'   => '',
-						'compare' => '=',
-					]
-				]
-			]
-		];
 
-		$query_products = new \WP_Query( $args );
+		$this->get_plugin()->log( sprintf( 'Starting manual product creation (page %d)', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
 
-		if ( ! empty( $query_products->posts ) ) {
-			$products = array_map( 'wc_get_product', $query_products->posts );
+		$query_products = wc_get_products( [
+			'limit'                => 50,
+			'paginate'             => true,
+			'page'                 => $current_page,
+			'type'                 => [ 'simple', 'variation' ],
+			'return'               => 'ids',
+			'status'               => 'publish',
+			'merit_aktiva_item_id' => '',
+		] );
+
+		if ( 1 === $current_page ) {
+			$this->get_plugin()->log( sprintf( 'Found total of %d products, total of %d pages', $query_products->total, $query_products->max_num_pages ), $this->get_plugin()->get_id() . '_create-products' );
+			$this->get_plugin()->delete_cache( 'create_products' );
+		}
+
+		if ( ! empty( $query_products->products ) ) {
+			$products = array_map( 'wc_get_product', $query_products->products );
 
 			// Create products
-			$this->get_api()->create_products( $products );
+			$create_products = $this->get_api()->create_products( $products );
 
-			do_action( 'konekt_merit_aktiva_created_products' );
+			if ( true === $create_products ) {
+				do_action( 'konekt_merit_aktiva_created_products' );
 
-			// Sync stock
-			foreach ( $products as $product ) {
-				$external_item = $this->get_api()->get_item( $product->get_sku() );
+				// Sync stock
+				foreach ( $products as $product ) {
 
-				if ( $external_item ) {
-					$this->get_plugin()->add_product_meta( $product, [
-						'item_id'  => $external_item->ItemId,
-						'uom_name' => $external_item->UnitofMeasureName,
-					] );
+					if ( $product->is_type( 'external' ) ) {
+						continue;
+					}
+
+					$external_item = $this->get_api()->get_item( $product->get_sku() );
+
+					if ( $external_item ) {
+						$this->get_plugin()->add_product_meta( $product, [
+							'item_id'  => $external_item->ItemId,
+							'uom_name' => $external_item->UnitofMeasureName,
+						] );
+					} else {
+						$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+					}
+
 				}
+			} else {
+				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $create_products, true ) ), $this->get_plugin()->get_id() . '_create-products' );
+
+				$creation_errors  = $this->get_plugin()->get_cache( 'create_products' );
+				$creation_errors .= print_r( $create_products, true );
+
+				$this->get_plugin()->set_cache( 'create_products', $creation_errors, 0 );
 			}
 
 			if ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) {
@@ -678,10 +684,22 @@ class Integration extends \WC_Integration {
 					'current_page'   => $current_page + 1,
 				], $this->get_plugin()->get_settings_url() ) );
 			} else {
+				$this->get_plugin()->log( sprintf( 'Finished manual product sync after %d pages', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
+
+				$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
+
+				if ( ! empty( $creation_errors ) ) {
+					if ( WC_Admin_Notices::has_notice( $this->get_plugin()->get_id() . '_create-products' ) ) {
+						WC_Admin_Notices::remove_notice( $this->get_plugin()->get_id() . '_create-products' );
+					}
+
+					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', $creation_errors );
+				}
+
 				wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 			}
 		} else {
-			$this->get_plugin()->log( 'Did not find any products' );
+			$this->get_plugin()->log( 'Did not find any products', $this->get_plugin()->get_id() . '_create-products' );
 		}
 	}
 
@@ -825,6 +843,43 @@ class Integration extends \WC_Integration {
 		}
 
 		return $tax;
+	}
+
+
+	public function add_custom_product_query_var( $query, $query_vars ) {
+		if ( isset( $query_vars['merit_aktiva_item_id'] ) ) {
+			if ( '' === $query_vars['merit_aktiva_item_id'] ) {
+				$query['meta_query'][] = [
+					'relation' => 'AND',
+					[
+						'key'     => '_sku',
+						'value'   => '',
+						'compare' => '!=',
+					],
+					[
+						'relation' => 'OR',
+						[
+							'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+							'compare' => 'NOT EXISTS',
+						],
+						[
+							'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+							'value'   => '',
+							'compare' => '=',
+						]
+					]
+				];
+			}
+			else {
+				$query['meta_query'][] = [
+					'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+					'value'   => $query_vars['merit_aktiva_item_id'],
+					'compare' => '=',
+				];
+			}
+		}
+
+		return $query;
 	}
 
 

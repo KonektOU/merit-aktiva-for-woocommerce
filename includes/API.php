@@ -313,6 +313,12 @@ class API extends Framework\SV_WC_API_Base {
 			if ( false !== ( $customer_id = $order->get_customer_id() ) ) {
 				update_user_meta( $customer_id, '_wc_' . $this->get_plugin()->get_id() . '_customer_id', $response->CustomerId );
 			}
+
+			return [
+				'invoice_id'  => $response->InvoiceId,
+				'invoice_no'  => $response->InvoiceNo,
+				'customer_id' => $response->CustomerId,
+			];
 		} else {
 			// Request failed
 			$this->get_plugin()->add_order_note(
@@ -320,14 +326,18 @@ class API extends Framework\SV_WC_API_Base {
 				__( 'Invoice generation failed.', 'konekt-merit-aktiva' )
 			);
 
-			if ( 'yes' === $this->integration->get_option( 'save_api_messages_to_notes', 'no' ) ) {
-				if ( ! empty( $message = $response->Message ) ) {
+			if ( ! empty( $message = $response->Message ) ) {
+				if ( 'yes' === $this->integration->get_option( 'save_api_messages_to_notes', 'no' ) ) {
 					$this->get_plugin()->add_order_note( $order, $message );
 				}
+
+				return $response->Message;
+			} else {
+				return null;
 			}
 		}
 
-		return 200 === $this->get_response_code();
+		return false;
 	}
 
 
@@ -392,13 +402,19 @@ class API extends Framework\SV_WC_API_Base {
 		$order->save();
 
 		// Create invoice to Aktiva to save the products
-		$this->create_invoice( $order, true );
+		$invoice = $this->create_invoice( $order, true );
 
-		// Delete invoice from Aktiva
-		$this->delete_invoice( $order->get_id() );
+		if ( ! empty( $invoice['invoice_id'] ) ) {
+			// Delete invoice from Aktiva
+			$this->delete_invoice( false, $invoice['invoice_id'] );
 
-		// Delete WC order
-		$order->delete( true );
+			// Delete WC order
+			$order->delete( true );
+
+			return true;
+		}
+
+		return $invoice;
 	}
 
 
@@ -463,11 +479,18 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
-	public function delete_invoice( $order_id ) {
-		$order        = wc_get_order( $order_id );
-		$request_data = [
-			'Id' => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
-		];
+	public function delete_invoice( $order_id, $external_id = null ) {
+		if ( ! $external_id ) {
+			$order        = wc_get_order( $order_id );
+			$request_data = [
+				'Id' => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
+			];
+		}
+		else {
+			$request_data = [
+				'Id' => $external_id,
+			];
+		}
 
 		$request = $this->perform_request(
 			$this->get_new_request( [
