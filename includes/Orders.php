@@ -103,9 +103,25 @@ class Orders {
 
 		if ( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) || ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) ) {
 			$this->get_api()->create_invoice( $order );
-
+			$this->resync_order_products_stock( $order );
 		} elseif ( 'refunded' === $order_new_status ) {
 			//
+		}
+	}
+
+
+	public function resync_order_products_stock( $order ) {
+		foreach ( $order->get_items( [ 'line_item' ] ) as $order_item ) {
+			if ( is_callable( array( $order_item, 'get_product' ) ) ) {
+
+				$product = $order_item->get_product();
+
+				if ( ! $product ) {
+					continue;
+				}
+
+				$this->integration->manually_update_product_stock_data( $product->get_id() );
+			}
 		}
 	}
 
@@ -115,6 +131,7 @@ class Orders {
 		$refund = new \WC_Order_Refund( $refund_id );
 
 		$this->get_api()->create_invoice( $order, false, $refund );
+		$this->resync_order_products_stock( $order );
 	}
 
 

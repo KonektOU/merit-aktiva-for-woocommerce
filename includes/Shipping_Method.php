@@ -73,7 +73,8 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$actual_products = 0;
 
 		foreach ( $package['contents'] as $package_product ) {
-			$product    = wc_get_product( $package_product['variation_id'] ?? $package_product['product_id'] );
+			$product_id = $package_product['variation_id'] && $package_product['variation_id'] > 0 ? $package_product['variation_id'] : $package_product['product_id'];
+			$product    = wc_get_product( $product_id );
 			$warehouses = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 
 			if ( ! empty( $warehouses ) ) {

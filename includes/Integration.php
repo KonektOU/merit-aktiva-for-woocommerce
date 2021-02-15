@@ -45,6 +45,7 @@ class Integration extends \WC_Integration {
 			}
 		}
 
+		// Custom WC query
 		add_filter( 'woocommerce_product_data_store_cpt_get_products_query', array( $this, 'add_custom_product_query_var' ), 10, 2 );
 	}
 
@@ -150,6 +151,13 @@ class Integration extends \WC_Integration {
 				'title'       => __( 'Primary warehouse ID', 'konekt-merit-aktiva' ),
 				'type'        => 'text',
 				'default'     => '',
+			],
+
+			'refund_warehouse_id' => [
+				'title'       => __( 'Refund warehouse ID', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'default'     => '',
+				'description' => __( 'All refunded products will be redirected there.', 'konekt-merit-aktiva' ),
 			],
 
 			'warehouses' => [
@@ -275,6 +283,170 @@ class Integration extends \WC_Integration {
 
 
 	public function admin_init() {
+		if ( isset( $_GET['update_source'] ) && $this->id === $_GET['update_source'] ) {
+			do_action( 'konekt_merit_aktiva_update_product' );
+
+			$product_id = sanitize_text_field( wp_unslash( $_GET['post'] ) );
+			$update     = $this->manually_update_product_stock_data( $product_id );
+
+			if ( true === $update ) {
+				$this->get_plugin()->get_admin_notice_handler()->add_admin_notice( __( 'Product updated.', 'konekt-merit-aktiva' ), 'product_update' );
+			} else {
+				$this->get_plugin()->get_admin_notice_handler()->add_admin_notice( __( 'Product update failed.', 'konekt-merit-aktiva' ), 'product_update' );
+			}
+		}
+
+		// Manual update handling
+		add_action( 'woocommerce_product_options_inventory_product_data', array( $this, 'add_product_update_data_field' ) );
+	}
+
+
+	public function manually_update_product_stock_data( $product_id ) {
+		$_product = wc_get_product( $product_id );
+		$products = [ $_product ];
+
+		if ( $_product->is_type( 'variable' ) ) {
+			foreach ( $_product->get_children() as $child ) {
+				$variation = wc_get_product( $child );
+
+				if ( $variation->get_sku() ) {
+					$products[] = $variation;
+				}
+			}
+		}
+
+		if ( ! empty( $products ) ) {
+			foreach ( $products as $product ) {
+
+				foreach ( $this->get_warehouses() as $warehouse ) {
+					$warehouse_products = $this->get_warehouse_products( $warehouse['id'] );
+					$item_stock         = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
+
+					if ( ! $item_stock ) {
+						continue;
+					}
+
+					if ( array_key_exists( $product->get_sku(), $warehouse_products ) ) {
+						$warehouse_products[ $product->get_sku() ] = (object) [
+							'Type'              => $item_stock->Type,
+							'InventoryQty'      => $item_stock->InventoryQty,
+							'ItemId'            => $item_stock->ItemId,
+							'UnitofMeasureName' => $item_stock->UnitofMeasureName,
+							'ProductId'         => $product_id,
+						];
+
+						$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
+
+						$this->update_product_stock_data( $product );
+					}
+				}
+
+				return true;
+			}
+
+			if ( $_product->is_type( 'variable' ) ) {
+				$_product->sync_stock_status( $_product );
+			}
+		}
+
+		return false;
+	}
+
+
+	public function get_product_from_warehouse( $product_sku, $warehouse_id ) {
+		$all_products = $this->get_warehouse_products( $warehouse_id );
+		$product      = null;
+
+		if ( $all_products ) {
+			if ( array_key_exists( $product_sku, $all_products ) ) {
+				$product = $all_products[ $product_sku ];
+			}
+		}
+
+		return $product;
+	}
+
+
+	public function update_product_stock_data( $product ) {
+		$warehouses     = $this->get_warehouses();
+		$quantities     = [];
+		$total_quantity = 0;
+
+		foreach ( $warehouses as $warehouse ) {
+
+			$item_stock = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
+
+			if ( empty( $item_stock ) ) {
+				$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+
+				if ( $product->is_type( 'variable' ) ) {
+					if ( ! $product->managing_stock() && $product->get_stock_status() == 'outofstock' ) {
+						$product->set_stock_status( 'instock' );
+					}
+				}
+
+				continue;
+			}
+
+			$item_stock = (array) $item_stock;
+
+			if ( 'Laokaup' != $item_stock['Type'] ) {
+				$quantities = null;
+
+				$product->set_manage_stock( false );
+				$product->set_stock_status( 'instock' );
+
+				break;
+			}
+
+			// Manage stock
+			if ( $product->is_type( 'variable' ) ) {
+				$product->set_manage_stock( false );
+				$product->set_stock_status( 'instock' );
+			} else {
+				$product->set_manage_stock( true );
+			}
+
+			// Save item ID
+			$this->get_plugin()->add_product_meta( $product, [
+				'item_id'  => $item_stock['ItemId'],
+				'uom_name' => $item_stock['UnitofMeasureName'],
+			] );
+
+			if ( $item_stock['InventoryQty'] ) {
+				$total_quantity += (int) $item_stock['InventoryQty'];
+
+				$quantities[] = [
+					'location' => $warehouse['id'],
+					'quantity' => wc_stock_amount( $item_stock['InventoryQty'] ),
+				];
+			}
+		}
+
+		if ( null !== $quantities && $product->managing_stock() ) {
+			// Save quantities to meta
+			$this->get_plugin()->add_product_meta(
+				$product,
+				[
+					'quantities_by_warehouse' => $quantities
+				]
+			);
+
+			if ( $total_quantity != $product->get_stock_quantity() ) {
+				$product->set_stock_quantity( $total_quantity );
+			}
+
+			if ( $total_quantity > 0 && 'instock' !== $product->get_stock_status() ) {
+				$product->set_stock_status( 'instock' );
+			}
+
+		} else {
+			$this->get_plugin()->remove_product_meta( $product, [ 'quantities_by_warehouse' ] );
+		}
+
+		if ( ! empty( $product->get_changes() ) ) {
+			$product->save();
+		}
 	}
 
 
@@ -306,8 +478,10 @@ class Integration extends \WC_Integration {
 	public function schedule_cron() {
 
 		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
-			if ( ! wp_next_scheduled( 'konekt_merit_aktiva_cron_job' ) ) {
-				wp_schedule_event( time(), 'twicedaily', 'konekt_merit_aktiva_cron_job' );
+			foreach ( $this->get_warehouses() as $key => $warehouse ) {
+				if ( ! wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
+					wp_schedule_event( time() + (  MINUTE_IN_SECONDS + ( ( $key * 2 ) * MINUTE_IN_SECONDS ) ), 'twicedaily', 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
+				}
 			}
 		} else {
 			if ( ! did_action( $this->get_plugin()->get_id() . '_sync-product-stock' ) ) {
@@ -315,26 +489,25 @@ class Integration extends \WC_Integration {
 			}
 		}
 
-		add_action( 'konekt_merit_aktiva_cron_job', array( $this, 'cron_hook' ) );
+		add_action( 'konekt_merit_aktiva_cron_job', array( $this, 'cron_hook' ), 10 );
+		add_action( 'konekt_merit_aktiva_manual_cron_job', array( $this, 'cron_hook' ), 10 );
+		add_action( 'konekt_merit_aktiva_products_cron_job', array( $this, 'cron_products_hook' ), 10 );
 	}
 
 
-	public function cron_hook() {
+	public function cron_hook( $warehouse ) {
 
 		$this->get_plugin()->log( 'Starting cron' );
 
+		if ( wp_next_scheduled( 'konekt_merit_aktiva_products_cron_job' ) ) {
+			wp_clear_scheduled_hook( 'konekt_merit_aktiva_products_cron_job' );
+		}
+
 		$time_start  = microtime( true );
-		$product_ids = $this->update_warehouse_products( true );
+		$product_ids = $this->update_warehouse_products( true, [ $warehouse ] );
 
 		if ( ! empty( $product_ids ) ) {
-			$this->get_plugin()->log( 'Fetching products for an update.' );
-
-			wc_get_products( [
-				'include' => $product_ids,
-				'type'    => array_merge( [ 'variation' ], wc_get_product_types() ),
-				'return'  => 'objects',
-				'limit'   => -1,
-			] );
+			wp_schedule_single_event( time() + ( 3 * MINUTE_IN_SECONDS ), 'konekt_merit_aktiva_products_cron_job' );
 		}
 
 		$time_end = microtime( true );
@@ -344,20 +517,87 @@ class Integration extends \WC_Integration {
 	}
 
 
+	public function cron_products_hook( $page = 1 ) {
+		$this->get_plugin()->log( sprintf( 'Fetching products for an update, page %d.', $page ), $this->get_plugin()->get_id() . '_update-products' );
+
+		$results = wc_get_products( [
+			'type'     => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),
+			'return'   => 'ids',
+			'limit'    => 250,
+			'order'    => 'DESC',
+			'orderby'  => 'post_type',
+			'status'   => 'publish',
+			'paginate' => true,
+			'page'     => $page,
+		] );
+
+		foreach ( $results->products as $product_id ) {
+			$product_id = $this->get_wpml_original_post_id( $product_id );
+			$product    = wc_get_product( $product_id );
+
+			if ( $product ) {
+				if ( ! $product->is_type( 'external' ) ) {
+					$this->update_product_stock_data( $product );
+				}
+
+				if ( $product->is_type( 'variable' ) ) {
+					$product->sync_stock_status( $product );
+
+					if ( ! empty( $product->get_changes() ) ) {
+						$product->save();
+					}
+				}
+			}
+		}
+
+		$this->get_plugin()->log( sprintf( 'Updated %d products, page %d of %d. Total products %d.', count( $results->products ), $page, $results->max_num_pages, $results->total ), $this->get_plugin()->get_id() . '_update-products' );
+
+		if ( $results->max_num_pages > $page ) {
+			wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'konekt_merit_aktiva_products_cron_job', [ $page + 1 ] );
+		}
+		elseif ( $results->max_num_pages == $page ) {
+			$this->get_plugin()->log( sprintf( 'End of product updates. Updated total of %d.', $results->total ), $this->get_plugin()->get_id() . '_update-products' );
+		}
+	}
+
+
 	public function get_product_id_by_sku( $product_sku ) {
 		$product  = null;
 		$products = wc_get_products( [
-			'sku'    => $product_sku,
-			'limit'  => 1,
-			'type'   => array_merge( [ 'variation' ], wc_get_product_types() ),   // also search for variations
-			'return' => 'ids',
+			'sku'     => $product_sku,
+			'limit'   => 1,
+			'type'    => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),   // also search for variations
+			'return'  => 'ids',
 		] );
 
 		if ( $products && 1 === count( $products ) ) {
 			$product = reset( $products );
+			$product = $this->get_wpml_original_post_id( $product );
 		}
 
 		return $product;
+	}
+
+
+	public function get_wpml_original_post_id( $post_id, $type = 'post_product' ) {
+		global $sitepress;
+
+		if ( ! $sitepress || ! defined( 'ICL_LANGUAGE_CODE' ) ) {
+			return $post_id;
+		}
+
+		$trid         = $sitepress->get_element_trid( $post_id, $type );
+		$translations = $sitepress->get_element_translations( $trid, $type );
+
+		if ( ! empty( $translations ) ) {
+			foreach ( $translations as $translation ) {
+				if ( $translation->original ) {
+					return $translation->element_id;
+				}
+			}
+		}
+
+		return $post_id;
 	}
 
 
@@ -366,8 +606,11 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function update_warehouse_products( $clear_cache = false ) {
-		$warehouses  = $this->get_warehouses();
+	public function update_warehouse_products( $clear_cache = false, $warehouses = [] ) {
+		if ( empty( $warehouses ) ) {
+			$warehouses = $this->get_warehouses();
+		}
+
 		$product_ids = [];
 
 		foreach ( $warehouses as $warehouse ) {
@@ -395,8 +638,6 @@ class Integration extends \WC_Integration {
 						if ( array_key_exists( $product_sku, $cleaned_data ) ) {
 							continue;
 						}
-
-						$this->get_plugin()->delete_cache( 'item_stock_' . $product_sku . '@' . $warehouse['id'] );
 
 						$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
 						$product_data      = [
@@ -610,7 +851,11 @@ class Integration extends \WC_Integration {
 
 		$this->get_plugin()->log( 'Starting manual sync' );
 
-		wp_schedule_single_event( time(), 'konekt_merit_aktiva_cron_job' );
+		foreach ( $this->get_warehouses() as $key => $warehouse ) {
+			if ( ! wp_next_scheduled( 'konekt_merit_aktiva_manual_cron_job', [ $warehouse ] ) ) {
+				wp_schedule_single_event( time() + ( $key * MINUTE_IN_SECONDS ), 'konekt_merit_aktiva_manual_cron_job', [ $warehouse ] );
+			}
+		}
 	}
 
 
@@ -880,6 +1125,23 @@ class Integration extends \WC_Integration {
 		}
 
 		return $query;
+	}
+
+
+	/**
+	 * Add custom button for manual product data update
+	 *
+	 * @return void
+	 */
+	public function add_product_update_data_field() {
+		?>
+		<div class="options_group options-group__<?php echo esc_attr( $this->id ) ?>">
+			<p class="form-field">
+				<label><?php echo esc_html( $this->get_method_title() ); ?></label>
+				<a href="<?php echo esc_url( add_query_arg( 'update_source', $this->id ) ); ?>" class="button"><?php esc_html_e( 'Update data', 'konekt-merit-aktiva' ); ?></a>
+			</p>
+		</div>
+		<?php
 	}
 
 

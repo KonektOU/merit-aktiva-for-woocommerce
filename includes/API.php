@@ -81,6 +81,8 @@ class API extends Framework\SV_WC_API_Base {
 		$tax_amount       = [];
 		$is_full_refund   = false;
 		$order_line_items = [];
+		$total_amount     = 0;
+		$total_tax_amount = 0;
 
 		// Look for location code from shipping method
 		$location_code = $this->get_plugin()->get_order_warehouse_id( $order );
@@ -88,6 +90,10 @@ class API extends Framework\SV_WC_API_Base {
 		// Get order items
 		if ( $refund ) {
 			$order_line_items = $refund->get_items( [ 'line_item', 'shipping' ] );
+
+			if ( ! empty( $refund_warehouse_id = $this->integration->get_option( 'refund_warehouse_id', false ) ) ) {
+				$location_code = $refund_warehouse_id;
+			}
 		}
 
 		if ( empty( $order_line_items ) && $refund && abs( $refund->get_total( 'edit' ) ) == $order->get_total( 'edit' ) ) {
@@ -126,6 +132,8 @@ class API extends Framework\SV_WC_API_Base {
 				$product = $order_item->get_product();
 
 				if ( ! $product ) {
+					$total_amount += $order_row['Price'] * $order_row['Quantity'];
+
 					continue;
 				}
 
@@ -191,6 +199,9 @@ class API extends Framework\SV_WC_API_Base {
 				}
 			}
 
+			$total_amount     += $order_row['Price'] * $order_row['Quantity'];
+			$total_tax_amount += $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) );
+
 			$order_items[] = $order_row;
 			$tax_items[]   = [
 				'TaxId'  => $order_row['TaxId'],
@@ -222,16 +233,6 @@ class API extends Framework\SV_WC_API_Base {
 			];
 		}
 
-		if ( $refund ) {
-			if ( $is_full_refund ) {
-				$total_amount = $this->format_number( 0 - $order->get_total( 'edit' ) + $order->get_total_tax( 'edit' ) );
-			} else {
-				$total_amount = $this->format_number( $refund->get_total( 'edit' ) - $refund->get_total_tax( 'edit' ) );
-			}
-		} else {
-			$total_amount = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) );
-		}
-
 		// Prepare invoice data
 		$invoice = [
 			// Customer data
@@ -252,7 +253,7 @@ class API extends Framework\SV_WC_API_Base {
 
 			// Invoice rows
 			'InvoiceRow'      => $order_items,
-			'TotalAmount'     => $total_amount,
+			'TotalAmount'     => $this->format_number( $total_amount ),
 			'TaxAmount'       => $tax_items,
 
 			// Additional information
@@ -264,16 +265,18 @@ class API extends Framework\SV_WC_API_Base {
 
 		// Payment data
 		if ( $order->is_paid() && ! $refund ) {
-			$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
-			$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
-			$invoice['Payment']         = [
-				'PaymentMethod' => $order->get_payment_method_title(),
-				'PaidAmount'    => $this->format_number( $order->get_total( 'edit' ) ),
-				'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
-			];
+			if ( $order->get_date_paid() ) {
+				$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
+				$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
+				$invoice['Payment']         = [
+					'PaymentMethod' => $order->get_payment_method_title(),
+					'PaidAmount'    => $this->format_number( $total_amount ),
+					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
+				];
 
-			if ( ! empty( $this->integration->get_option( 'invoice_payment_method_name', '' ) ) ) {
-				$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'invoice_payment_method_name', '' );
+				if ( ! empty( $this->integration->get_option( 'invoice_payment_method_name', '' ) ) ) {
+					$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'invoice_payment_method_name', '' );
+				}
 			}
 		}
 
@@ -404,12 +407,12 @@ class API extends Framework\SV_WC_API_Base {
 		// Create invoice to Aktiva to save the products
 		$invoice = $this->create_invoice( $order, true );
 
+		// Delete WC order
+		$order->delete( true );
+
 		if ( ! empty( $invoice['invoice_id'] ) ) {
 			// Delete invoice from Aktiva
 			$this->delete_invoice( false, $invoice['invoice_id'] );
-
-			// Delete WC order
-			$order->delete( true );
 
 			return true;
 		}
@@ -532,7 +535,7 @@ class API extends Framework\SV_WC_API_Base {
 	 * @return string
 	 */
 	private function format_number( $number ) {
-		return Framework\SV_WC_Helper::number_format( $number );
+		return Framework\SV_WC_Helper::number_format( round( $number, 2 ) );
 	}
 
 
