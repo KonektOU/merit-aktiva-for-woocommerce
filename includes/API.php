@@ -79,7 +79,6 @@ class API extends Framework\SV_WC_API_Base {
 		$order_items      = [];
 		$tax_items        = [];
 		$tax_amount       = [];
-		$is_full_refund   = false;
 		$order_line_items = [];
 		$total_amount     = 0;
 		$total_tax_amount = 0;
@@ -98,7 +97,6 @@ class API extends Framework\SV_WC_API_Base {
 
 		if ( empty( $order_line_items ) && $refund && abs( $refund->get_total( 'edit' ) ) == $order->get_total( 'edit' ) ) {
 			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
-			$is_full_refund   = true;
 		}
 		elseif ( empty( $order_line_items ) ) {
 			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
@@ -172,9 +170,10 @@ class API extends Framework\SV_WC_API_Base {
 				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) ) {
 					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
 
-					$order_row['DiscountPct']    = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
-					$order_row['DiscountAmount'] = $this->format_number( $discount_amount );
-					$order_row['Price']          = $this->format_number( $order_item->get_subtotal( 'edit' ) );
+					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
+					$order_row['Price']           = $this->format_number( $order_item->get_subtotal( 'edit' ) );                           // no VAT, no discount
+					$order_row['DiscountAmount']  = $this->format_number( $discount_amount );
+					$order_row['DiscountedPrice'] = $this->format_number( $order_row['Price'] - $order_row['DiscountAmount'] );
 				}
 
 				$product_uom = $this->get_plugin()->get_product_meta( $product, 'uom_name' );
@@ -199,7 +198,13 @@ class API extends Framework\SV_WC_API_Base {
 				}
 			}
 
-			$total_amount     += $order_row['Price'] * $order_row['Quantity'];
+			if ( ! empty( $order_row['DiscountedPrice'] ) ) {
+				$total_amount += $this->format_number( $order_row['DiscountedPrice'] * $order_row['Quantity'] );
+			}
+			else {
+				$total_amount += $this->format_number( $order_row['Price'] * $order_row['Quantity'] );
+			}
+
 			$total_tax_amount += $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) );
 
 			$order_items[] = $order_row;
@@ -250,6 +255,7 @@ class API extends Framework\SV_WC_API_Base {
 			'RefNo'           => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_reference_number', $reference_number ),
 			'InvoiceNo'       => ( $refund ? 'C' : '' ) . $order->get_order_number(),
 			'CurrencyCode'    => $order->get_currency(),
+			'RoundingAmount'  => 5,
 
 			// Invoice rows
 			'InvoiceRow'      => $order_items,
