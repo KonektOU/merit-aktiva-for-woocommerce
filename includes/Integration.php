@@ -18,8 +18,9 @@ class Integration extends \WC_Integration {
 	/** @var Konekt\WooCommerce\Merit_Aktiva\API API handler instance */
 	protected $api = null;
 
-
 	protected $orders = null;
+
+	const DEFAULT_TAX_CODE = 'b9b25735-6a15-4d4e-8720-25b254ae3d21';
 
 
 	/**
@@ -1085,6 +1086,9 @@ class Integration extends \WC_Integration {
 			if ( array_key_exists( $tax_rate_id, $current_taxes ) ) {
 				return $current_taxes[ $tax_rate_id ];
 			}
+		}
+		else {
+			return self::DEFAULT_TAX_CODE;
 		}
 
 		return $tax;

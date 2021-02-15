@@ -96,10 +96,10 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		if ( empty( $order_line_items ) && $refund && abs( $refund->get_total( 'edit' ) ) == $order->get_total( 'edit' ) ) {
-			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
+			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee' ] );
 		}
 		elseif ( empty( $order_line_items ) ) {
-			$order_line_items = $order->get_items( [ 'line_item', 'shipping' ] );
+			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee' ] );
 		}
 
 		// Add order items
@@ -186,7 +186,10 @@ class API extends Framework\SV_WC_API_Base {
 
 			} else {
 
-				$order_row['Item']['Code'] = $this->integration->get_option( 'invoice_shipping_sku' );
+				if ( $order_item->is_type( 'shipping' ) ) {
+					$order_row['Item']['Code'] = $this->integration->get_option( 'invoice_shipping_sku' );
+				}
+
 				$order_row['Item']['Type'] = self::ITEM_TYPE_SERVICE;
 			}
 
@@ -255,7 +258,6 @@ class API extends Framework\SV_WC_API_Base {
 			'RefNo'           => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_reference_number', $reference_number ),
 			'InvoiceNo'       => ( $refund ? 'C' : '' ) . $order->get_order_number(),
 			'CurrencyCode'    => $order->get_currency(),
-			'RoundingAmount'  => 5,
 
 			// Invoice rows
 			'InvoiceRow'      => $order_items,
@@ -268,6 +270,12 @@ class API extends Framework\SV_WC_API_Base {
 			'HComment'       => '',
 			'FComment'       => '',
 		];
+
+		$wc_total = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) - 0.03 );
+
+		if ( $wc_total != $invoice['TotalAmount'] ) {
+			$invoice['RoundingAmount']  = $this->format_number( $wc_total - $invoice['TotalAmount'] );
+		}
 
 		// Payment data
 		if ( $order->is_paid() && ! $refund ) {
