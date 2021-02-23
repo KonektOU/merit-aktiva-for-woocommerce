@@ -271,10 +271,10 @@ class API extends Framework\SV_WC_API_Base {
 			'FComment'       => '',
 		];
 
-		$wc_total = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) - 0.03 );
+		$wc_total = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) );
 
 		if ( $wc_total != $invoice['TotalAmount'] ) {
-			$invoice['RoundingAmount']  = $this->format_number( $wc_total - $invoice['TotalAmount'] );
+			$invoice['RoundingAmount'] = $this->format_number( $wc_total - $invoice['TotalAmount'] );
 		}
 
 		// Payment data
@@ -372,6 +372,8 @@ class API extends Framework\SV_WC_API_Base {
 			if ( $product->is_type( 'external' ) ) {
 				continue;
 			}
+
+			$this->get_plugin()->log( sprintf( 'Creating %s (%s)', $product->get_name(), $product->get_sku() ), $this->get_plugin()->get_id() . '_create-products' );
 
 			if ( $product->is_type( 'variable' ) ) {
 				foreach ( $product->get_children() as $variation_id ) {

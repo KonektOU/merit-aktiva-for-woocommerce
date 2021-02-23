@@ -867,7 +867,8 @@ class Integration extends \WC_Integration {
 
 		do_action( $this->get_plugin()->get_id() . '_create-products' );
 
-		$current_page = absint( wc_get_var( $_GET['current_page'], 1 ) );
+		$current_page  = absint( wc_get_var( $_GET['current_page'], 1 ) );
+		$last_creation = date_i18n( 'Y-m-d H:i:s' );
 
 		$this->get_plugin()->log( sprintf( 'Starting manual product creation (page %d)', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
 
@@ -879,6 +880,7 @@ class Integration extends \WC_Integration {
 			'return'               => 'ids',
 			'status'               => 'publish',
 			'merit_aktiva_item_id' => '',
+			'merit_aktiva_created' => $last_creation,
 		] );
 
 		if ( 1 === $current_page ) {
@@ -908,6 +910,7 @@ class Integration extends \WC_Integration {
 						$this->get_plugin()->add_product_meta( $product, [
 							'item_id'  => $external_item->ItemId,
 							'uom_name' => $external_item->UnitofMeasureName,
+							'created'  => $last_creation,
 						] );
 					} else {
 						$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
@@ -925,16 +928,18 @@ class Integration extends \WC_Integration {
 
 			if ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) {
 				wp_safe_redirect( add_query_arg( [
-					'action' => 'create-products',
-					'nonce'  => wp_create_nonce( 'create-products' ),
-					'current_page'   => $current_page + 1,
+					'action'       => 'create-products',
+					'nonce'        => wp_create_nonce( 'create-products' ),
+					'current_page' => $current_page + 1,
 				], $this->get_plugin()->get_settings_url() ) );
 			} else {
 				$this->get_plugin()->log( sprintf( 'Finished manual product sync after %d pages', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
 
-				$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
+				if ( ! $creation_errors ) {
+					$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
+				}
 
-				if ( ! empty( $creation_errors ) ) {
+				if ( $creation_errors ) {
 					if ( WC_Admin_Notices::has_notice( $this->get_plugin()->get_id() . '_create-products' ) ) {
 						WC_Admin_Notices::remove_notice( $this->get_plugin()->get_id() . '_create-products' );
 					}
@@ -1126,6 +1131,26 @@ class Integration extends \WC_Integration {
 					'compare' => '=',
 				];
 			}
+		}
+
+		if ( isset( $query_vars['merit_aktiva_created'] ) ) {
+			$query['meta_query'][] = [
+				'relation' => 'OR',
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
+					'value'   => $query_vars['merit_aktiva_created'],
+					'compare' => '!=',
+				]
+			];
 		}
 
 		return $query;
