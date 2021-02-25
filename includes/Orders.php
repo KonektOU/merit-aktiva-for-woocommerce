@@ -32,6 +32,14 @@ class Orders {
 
 			// Show order item warehouse location
 			add_action( 'woocommerce_after_order_itemmeta', array( $this, 'show_warehouse_name' ), 10, 2 );
+
+			// Add order ID column
+			add_filter( 'manage_edit-shop_order_columns', array( $this, 'add_order_listing_columns' ) );
+			add_filter( 'manage_shop_order_posts_custom_column', array( $this, 'show_order_listing_column' ), 10, 1 );
+
+			// Allow filtering orders with/without order ID
+			add_action( 'restrict_manage_posts', array( $this, 'filter_orders_by_external_order_id') , 20 );
+			add_filter( 'request', array( $this, 'filter_orders_by_external_order_id_query' ) );
 		}
 	}
 
@@ -145,6 +153,73 @@ class Orders {
 
 		// Submit manually
 		$this->maybe_create_invoice( $order->get_id(), $this->integration->get_option( 'invoice_sync_status', 'processing' ), $this->integration->get_option( 'invoice_sync_status', 'processing' ), $order );
+	}
+
+
+	public function add_order_listing_columns( $columns ) {
+		$new_columns = [];
+
+		foreach ( $columns as $column_name => $column_info ) {
+
+			if ( 'order_total' === $column_name ) {
+				$new_columns[ $this->integration->id ] = __( 'Merit Aktiva', 'konekt-merit-aktiva' );
+			}
+
+			$new_columns [ $column_name ] = $column_info;
+
+		}
+
+		return $new_columns;
+	}
+
+
+	public function show_order_listing_column( $column ) {
+		global $post;
+
+		if ( $this->integration->id == $column ) {
+			$order = wc_get_order( $post->ID );
+
+			echo $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+		}
+	}
+
+
+	public function filter_orders_by_external_order_id() {
+		global $typenow;
+
+		if ( 'shop_order' === $typenow ) {
+			$action_name = $this->integration->id . '_order_id_filter';
+			?>
+			<select name="<?php echo esc_attr( $action_name ); ?>" id="dropdown_<?php echo esc_attr( $action_name ); ?>">
+				<option value=""><?php esc_html_e( 'Show all orders', 'konekt-merit-aktiva' ); ?></option>
+
+				<option value="1" <?php echo esc_attr( isset( $_GET[$action_name] ) ? selected( '1', $_GET[$action_name], false ) : '' ); ?>><?php esc_html_e( 'Merit Aktiva: Submitted', 'konekt-merit-aktiva' ) ?></option>
+				<option value="0" <?php echo esc_attr( isset( $_GET[$action_name] ) ? selected( '0', $_GET[$action_name], false ) : '' ); ?>><?php esc_html_e( 'Merit Aktiva: Not submitted', 'konekt-merit-aktiva' ) ?></option>
+			</select>
+			<?php
+		}
+	}
+
+
+	public function filter_orders_by_external_order_id_query( $vars ) {
+
+		global $typenow;
+
+		$action_name = $this->integration->id . '_order_id_filter';
+
+		if ( 'shop_order' == $typenow && isset( $_GET[$action_name] ) && is_numeric( $_GET[$action_name] ) ) {
+
+			$vars['meta_key'] = $this->get_plugin()->get_meta_key( 'invoice_id' );
+
+			if ( 1 === (int) $_GET[$action_name] ) {
+				$vars['meta_compare'] = '!=';
+				$vars['meta_value']   = '';
+			} elseif ( 0 === (int) $_GET[$action_name] ) {
+				$vars['meta_compare'] = 'NOT EXISTS';
+			}
+		}
+
+		return $vars;
 	}
 
 
