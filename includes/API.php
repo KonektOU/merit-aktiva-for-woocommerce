@@ -143,18 +143,31 @@ class API extends Framework\SV_WC_API_Base {
 					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 					$warehouse_key      = null;
 
-					foreach ( $this->integration->get_warehouses() as $warehouse ) {
-						if ( ! $warehouse['id'] ) {
-							continue;
+					if ( empty( $product_quantities ) ) {
+						$manual_update = $this->integration->manually_update_product_stock_data( $product->get_id() );
+
+						if ( true === $manual_update ) {
+							$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 						}
+					}
 
-						$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
+					if ( empty( $product_quantities ) ) {
+						$this->get_plugin()->log( sprintf( 'Not able to fetch product %s (%d) quantities.', $product->get_sku(), $product->get_id() ) );
+					}
+					else {
+						foreach ( $this->integration->get_warehouses() as $warehouse ) {
+							if ( ! $warehouse['id'] ) {
+								continue;
+							}
 
-						if ( false !== $warehouse_key ) {
-							if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
-								$order_row['LocationCode'] = $warehouse['id'];
+							$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
 
-								break;
+							if ( false !== $warehouse_key ) {
+								if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
+									$order_row['LocationCode'] = $warehouse['id'];
+
+									break;
+								}
 							}
 						}
 					}
@@ -282,7 +295,7 @@ class API extends Framework\SV_WC_API_Base {
 				$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
 				$invoice['Payment']         = [
 					'PaymentMethod' => $order->get_payment_method_title(),
-					'PaidAmount'    => $this->format_number( $total_amount ),
+					'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount ),
 					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 				];
 

@@ -20,7 +20,17 @@ class Integration extends \WC_Integration {
 
 	protected $orders = null;
 
-	const DEFAULT_TAX_CODE = 'b9b25735-6a15-4d4e-8720-25b254ae3d21';
+
+	/**
+	 * Default VAT rate ID
+	 */
+	const DEFAULT_ESTONIAN_TAX_ID = 'b9b25735-6a15-4d4e-8720-25b254ae3d21';
+
+
+	/**
+	 * Default zero tax ID
+	 */
+	const DEFAULT_ZERO_TAX_ID = '973a4395-665f-47a6-a5b6-5384dd24f8d0';
 
 
 	/**
@@ -323,31 +333,29 @@ class Integration extends \WC_Integration {
 					$warehouse_products = $this->get_warehouse_products( $warehouse['id'] );
 					$item_stock         = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 
-					if ( ! $item_stock ) {
+					if ( ! is_object( $item_stock ) || ! property_exists( $item_stock, 'InventoryQty' ) ) {
 						continue;
 					}
 
-					if ( array_key_exists( $product->get_sku(), $warehouse_products ) ) {
-						$warehouse_products[ $product->get_sku() ] = (object) [
-							'Type'              => $item_stock->Type,
-							'InventoryQty'      => $item_stock->InventoryQty,
-							'ItemId'            => $item_stock->ItemId,
-							'UnitofMeasureName' => $item_stock->UnitofMeasureName,
-							'ProductId'         => $product_id,
-						];
+					$warehouse_products[ $product->get_sku() ] = (object) [
+						'Type'              => $item_stock->Type,
+						'InventoryQty'      => $item_stock->InventoryQty,
+						'ItemId'            => $item_stock->ItemId,
+						'UnitofMeasureName' => $item_stock->UnitofMeasureName,
+						'ProductId'         => $product_id,
+					];
 
-						$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
+					$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
 
-						$this->update_product_stock_data( $product );
-					}
+					$this->update_product_stock_data( $product );
 				}
-
-				return true;
 			}
 
 			if ( $_product->is_type( 'variable' ) ) {
 				$_product->sync_stock_status( $_product );
 			}
+
+			return true;
 		}
 
 		return false;
@@ -1014,7 +1022,7 @@ class Integration extends \WC_Integration {
 						<tr>
 							<td><?php echo $row_counter + 1; ?>.</td>
 							<td><?php echo esc_html_e( '0% tax', 'konekt-merit-aktiva' ); ?></td>
-							<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? false ); ?>"></td>
+							<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? self::DEFAULT_ZERO_TAX_ID ); ?>"></td>
 						</tr>
 
 					</tbody>
@@ -1091,9 +1099,12 @@ class Integration extends \WC_Integration {
 			if ( array_key_exists( $tax_rate_id, $current_taxes ) ) {
 				return $current_taxes[ $tax_rate_id ];
 			}
+			elseif ( 'none' === $tax_rate_id ) {
+				return self::DEFAULT_ZERO_TAX_ID;
+			}
 		}
 		else {
-			return self::DEFAULT_TAX_CODE;
+			return self::DEFAULT_ESTONIAN_TAX_ID;
 		}
 
 		return $tax;

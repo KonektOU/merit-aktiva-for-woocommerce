@@ -40,6 +40,9 @@ class Orders {
 			// Allow filtering orders with/without order ID
 			add_action( 'restrict_manage_posts', array( $this, 'filter_orders_by_external_order_id') , 20 );
 			add_filter( 'request', array( $this, 'filter_orders_by_external_order_id_query' ) );
+
+			// Validate products in cart
+			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products' ), 10, 2 );
 		}
 	}
 
@@ -57,31 +60,40 @@ class Orders {
 			return;
 		}
 
-		$order_invoice_id = $this->get_plugin()->get_order_meta( $item->get_order(), 'invoice_id' );
+		$api_order = $this->get_api_order( $item->get_order() );
+
+		if ( $api_order ) {
+			foreach ( $api_order->Lines as $order_line ) {
+				if ( ! empty( $order_line->ArticleCode ) ) {
+					if ( $order_line->ArticleCode == $item->get_product()->get_sku() ) {
+						printf( '<div class="wc-order-item-sku"><strong>%s:</strong> %s</div>', __( 'Warehouse', 'konekt-merit-aktiva' ), $this->get_plugin()->attach_warehouse_title( '', $order_line->LocationCode ) );
+
+						break;
+					}
+				}
+			}
+		}
+	}
+
+
+	public function get_api_order( $order ) {
+		$order_invoice_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
 
 		if ( $order_invoice_id ) {
-			if ( false === ( $api_order = $this->get_plugin()->get_cache( 'order_' . $item->get_order_id() ) ) ) {
-				$api_order = $this->get_api()->get_order( $item->get_order_id() );
+			if ( false === ( $api_order = $this->get_plugin()->get_cache( 'order_' . $order->get_id() ) ) ) {
+				$api_order = $this->get_api()->get_order( $order->get_id() );
 
 				if ( ! empty( $api_order->Lines ) ) {
-					$this->get_plugin()->set_cache( 'order_' . $item->get_order_id(), $api_order, HOUR_IN_SECONDS );
+					$this->get_plugin()->set_cache( 'order_' . $order->get_id(), $api_order, HOUR_IN_SECONDS );
 				} else {
 					$api_order = null;
 				}
 			}
 
-			if ( $api_order ) {
-				foreach ( $api_order->Lines as $order_line ) {
-					if ( ! empty( $order_line->ArticleCode ) ) {
-						if ( $order_line->ArticleCode == $item->get_product()->get_sku() ) {
-							printf( '<div class="wc-order-item-sku"><strong>%s:</strong> %s</div>', __( 'Warehouse', 'konekt-merit-aktiva' ), $this->get_plugin()->attach_warehouse_title( '', $order_line->LocationCode ) );
-
-							break;
-						}
-					}
-				}
-			}
+			return $api_order;
 		}
+
+		return false;
 	}
 
 
@@ -162,7 +174,8 @@ class Orders {
 		foreach ( $columns as $column_name => $column_info ) {
 
 			if ( 'order_total' === $column_name ) {
-				$new_columns[ $this->integration->id ] = __( 'Merit Aktiva', 'konekt-merit-aktiva' );
+				$new_columns[ $this->integration->id ]                = __( 'Merit Aktiva', 'konekt-merit-aktiva' );
+				$new_columns[ $this->integration->id . '_warehouse' ] = __( 'Warehouse', 'konekt-merit-aktiva' );
 			}
 
 			$new_columns [ $column_name ] = $column_info;
@@ -177,9 +190,45 @@ class Orders {
 		global $post;
 
 		if ( $this->integration->id == $column ) {
-			$order = wc_get_order( $post->ID );
+			$order = \wc_get_order( $post->ID );
 
 			echo $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+		}
+		elseif ( $this->integration->id . '_warehouse' == $column ) {
+			$wc_order  = \wc_get_order( $post->ID );
+			$api_order = $this->get_api_order( $wc_order );
+
+			if ( $api_order ) {
+				$warehouses = [];
+
+				foreach ( $api_order->Lines as $location ) {
+					$warehouses[] = $this->get_plugin()->attach_warehouse_title( '', $location->LocationCode );
+				}
+
+				$warehouses = array_filter( $warehouses );
+
+				echo implode( ', ', $warehouses );
+			}
+		}
+	}
+
+
+	public function validate_cart_products( $data, $errors ) {
+		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+			$_product = apply_filters( 'woocommerce_cart_item_product', $cart_item['data'], $cart_item, $cart_item_key );
+
+			if ( $_product ) {
+				$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $_product );
+
+				if ( empty( $product_quantities ) ) {
+					$this->integration->manually_update_product_stock_data( $_product );
+					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $_product );
+				}
+
+				if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) == 0 ) {
+					$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $_product->get_name() ) );
+				}
+			}
 		}
 	}
 
