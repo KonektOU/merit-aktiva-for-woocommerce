@@ -53,8 +53,6 @@ class API extends Framework\SV_WC_API_Base {
 		$this->set_request_accept_header( 'application/json' );
 
 		$this->response_handler = API\Response::class;
-
-		add_action( 'requests-requests.before_request', array( $this, 'maybe_set_data_format_to_body' ), 999, 5 );
 	}
 
 
@@ -597,7 +595,7 @@ class API extends Framework\SV_WC_API_Base {
 		$args = wp_parse_args( $args, [
 			'path'   => '',
 			'params' => [],
-			'method' => 'GET',
+			'method' => 'POST',
 			'data'   => [],
 		] );
 
@@ -622,29 +620,6 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		return $query;
-	}
-
-
-	public function maybe_set_data_format_to_body( &$url, &$headers, &$data, &$type, &$options ) {
-		if ( stristr( $url, $this->get_request_uri() ) ) {
-			$options['data_format'] = 'body';
-		}
-	}
-
-
-	/**
-	 * Gets the request body.
-	 *
-	 * @since 4.5.0
-	 * @return string
-	 */
-	protected function get_request_body() {
-
-		if ( in_array( strtoupper( $this->get_request_method() ), array( 'GET', 'HEAD' ) ) ) {
-			return wp_json_encode( $this->get_request()->get_data() );
-		}
-
-		return ( $this->get_request() && $this->get_request()->to_string() ) ? $this->get_request()->to_string() : '';
 	}
 
 
