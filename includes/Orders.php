@@ -206,6 +206,7 @@ class Orders {
 				}
 
 				$warehouses = array_filter( $warehouses );
+				$warehouses = array_unique( $warehouses );
 
 				echo implode( ', ', $warehouses );
 			}

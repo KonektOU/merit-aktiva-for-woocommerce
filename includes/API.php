@@ -282,10 +282,12 @@ class API extends Framework\SV_WC_API_Base {
 			'FComment'       => '',
 		];
 
-		$wc_total = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) );
+		if ( ! $refund ) {
+			$wc_total = $this->format_number( $order->get_total( 'edit' ) - $order->get_total_tax( 'edit' ) );
 
-		if ( $wc_total != $invoice['TotalAmount'] ) {
-			$invoice['RoundingAmount'] = $this->format_number( $wc_total - $invoice['TotalAmount'] );
+			if ( $wc_total != $invoice['TotalAmount'] ) {
+				$invoice['RoundingAmount'] = $this->format_number( $wc_total - $invoice['TotalAmount'] );
+			}
 		}
 
 		// Payment data
