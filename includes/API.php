@@ -111,7 +111,7 @@ class API extends Framework\SV_WC_API_Base {
 					'Type'        => self::ITEM_TYPE_ITEM,
 				],
 				'Quantity' => $this->format_number( $order_item->get_quantity() ),
-				'Price'    => $this->format_number( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity() ),
+				'Price'    => round( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity(), 7 ),
 				'TaxId'    => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
 			];
 
@@ -128,7 +128,7 @@ class API extends Framework\SV_WC_API_Base {
 				$product = $order_item->get_product();
 
 				if ( ! $product ) {
-					$total_amount += $order_row['Price'] * $order_row['Quantity'];
+					$total_amount += $this->format_number( $order_row['Price'] * $order_row['Quantity'] );
 
 					continue;
 				}
@@ -182,7 +182,7 @@ class API extends Framework\SV_WC_API_Base {
 					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
 
 					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
-					$order_row['Price']           = $this->format_number( $order_item->get_subtotal( 'edit' ) );                           // no VAT, no discount
+					$order_row['Price']           = round( $order_item->get_subtotal( 'edit' ), 2 ); // no VAT, no discount
 					$order_row['DiscountAmount']  = $this->format_number( $discount_amount );
 					$order_row['DiscountedPrice'] = $this->format_number( $order_row['Price'] - $order_row['DiscountAmount'] );
 				}
@@ -205,7 +205,7 @@ class API extends Framework\SV_WC_API_Base {
 			}
 
 			if ( $refund ) {
-				$order_row['ItemCostAmount'] = $order_row['Price'];
+				$order_row['ItemCostAmount'] = $this->format_number( $order_row['Price'] );
 
 				if ( (float) $order_row['Quantity'] > 0 ) {
 					$order_row['Quantity'] = $this->format_number( 0 - (float) $order_row['Quantity'] );
@@ -297,7 +297,7 @@ class API extends Framework\SV_WC_API_Base {
 				$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
 				$invoice['Payment']         = [
 					'PaymentMethod' => $order->get_payment_method_title(),
-					'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount ),
+					'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount + ( $invoice['RoundingAmount'] ?? 0 ) ),
 					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 				];
 
@@ -563,8 +563,8 @@ class API extends Framework\SV_WC_API_Base {
 	 *
 	 * @return string
 	 */
-	private function format_number( $number ) {
-		return Framework\SV_WC_Helper::number_format( round( $number, 2 ) );
+	private function format_number( $number, $precision = 2 ) {
+		return Framework\SV_WC_Helper::number_format( round( $number, $precision ) );
 	}
 
 
