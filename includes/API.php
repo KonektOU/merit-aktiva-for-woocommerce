@@ -100,6 +100,14 @@ class API extends Framework\SV_WC_API_Base {
 			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee' ] );
 		}
 
+		// Find matching location
+		if ( ! $location_code ) {
+			$matching_location = $this->find_same_warehouse_for_items( $order_line_items );
+		}
+		else {
+			$matching_location = null;
+		}
+
 		// Add order items
 		/** @var \WC_Order_Item_Product $order_item */
 		foreach ( $order_line_items as $order_item ) {
@@ -148,29 +156,26 @@ class API extends Framework\SV_WC_API_Base {
 					$warehouse_key      = null;
 
 					if ( empty( $product_quantities ) ) {
-						$manual_update = $this->integration->manually_update_product_stock_data( $product->get_id() );
-
-						if ( true === $manual_update ) {
-							$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
-						}
-					}
-
-					if ( empty( $product_quantities ) ) {
 						$this->get_plugin()->log( sprintf( 'Not able to fetch product %s (%d) quantities.', $product->get_sku(), $product->get_id() ) );
 					}
 					else {
-						foreach ( $this->integration->get_warehouses() as $warehouse ) {
-							if ( ! $warehouse['id'] ) {
-								continue;
-							}
+						if ( null !== $matching_location ) {
+							$order_row['LocationCode'] = $matching_location;
+						}
+						else {
+							foreach ( $this->integration->get_warehouses() as $warehouse ) {
+								if ( ! $warehouse['id'] ) {
+									continue;
+								}
 
-							$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
+								$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
 
-							if ( false !== $warehouse_key ) {
-								if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
-									$order_row['LocationCode'] = $warehouse['id'];
+								if ( false !== $warehouse_key ) {
+									if ( $product_quantities[ $warehouse_key ]['quantity'] >= $order_item->get_quantity() ) {
+										$order_row['LocationCode'] = $warehouse['id'];
 
-									break;
+										break;
+									}
 								}
 							}
 						}
@@ -376,6 +381,50 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		return false;
+	}
+
+
+	public function find_same_warehouse_for_items( $order_items ) {
+		$location_code = null;
+
+		foreach ( $this->integration->get_warehouses() as $warehouse ) {
+			$is_enough_stock = true;
+
+			foreach ( $order_items as $order_item ) {
+				if ( is_callable( array( $order_item, 'get_product' ) ) ) {
+					$product            = $order_item->get_product();
+					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+
+					if ( empty( $product_quantities ) ) {
+						$manual_update = $this->integration->manually_update_product_stock_data( $product->get_id() );
+
+						if ( true === $manual_update ) {
+							$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+						}
+					}
+
+					$warehouse_key = array_search( $warehouse['id'], array_column( $product_quantities, 'location' ) );
+
+					if ( false !== $warehouse_key ) {
+						if ( ! $product_quantities[ $warehouse_key ]['quantity'] || $product_quantities[ $warehouse_key ]['quantity'] < $order_item->get_quantity() ) {
+							$is_enough_stock = false;
+
+							break;
+						} else {
+
+						}
+					}
+				}
+			}
+
+			if ( true === $is_enough_stock ) {
+				$location_code = $warehouse['id'];
+
+				break;
+			}
+		}
+
+		return $location_code;
 	}
 
 
