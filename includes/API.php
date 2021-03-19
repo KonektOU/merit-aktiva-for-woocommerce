@@ -304,6 +304,10 @@ class API extends Framework\SV_WC_API_Base {
 				if ( ! empty( $this->integration->get_option( 'invoice_payment_method_name', '' ) ) ) {
 					$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'invoice_payment_method_name', '' );
 				}
+
+				if ( 'cod' === $order->get_payment_method() ) {
+					$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'cod_payment_method_name', '' );
+				}
 			}
 		}
 

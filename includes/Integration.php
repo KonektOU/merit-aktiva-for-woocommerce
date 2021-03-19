@@ -144,6 +144,12 @@ class Integration extends \WC_Integration {
 				'description' => __( 'This will override the payment method title from WooCommerce. Leave empty for WooCommerce title.', 'konekt-merit-aktiva' ),
 			],
 
+			'cod_payment_method_name' => [
+				'title'       => __( 'Cash of Delivery method name', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'default'     => '',
+			],
+
 			// Stock
 			'stock_section_title' => [
 				'title' => __( 'Stock management configuration', 'konekt-merit-aktiva' ),
