@@ -544,6 +544,24 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
+	public function create_payment( $invoice_no, $reference_number, $amount, $customer_name ) {
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'method' => 'POST',
+				'path'   => 'sendpayment',
+				'data'   => [
+					'InvoiceNo'    => $invoice_no,
+					'Amount'       => $amount,
+					'RefNo'        => $reference_number,
+					'CustomerName' => $customer_name,
+				],
+			] )
+		);
+
+		return empty( $request ) ? null : $request->response_data;
+	}
+
+
 	public function get_item_stock( $product_sku, $warehouse_id ) {
 		return $this->get_item( $product_sku, $warehouse_id );
 	}

@@ -26,7 +26,8 @@ class Orders {
 
 			// Maybe create or delete invoice when order status is okay
 			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
-			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_delete_invoice' ), 20, 4 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_delete_invoice' ), 21, 4 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_payment' ), 22, 4 );
 
 			// Refund orders when needed
 			add_action( 'woocommerce_order_refunded', array( $this, 'refund_order' ), 20, 2 );
@@ -165,6 +166,42 @@ class Orders {
 				);
 
 				$this->get_plugin()->remove_order_meta( $order, [ 'invoice_id', 'customer_id' ] );
+			}
+		}
+	}
+
+
+	/**
+	 * Create payment for COD
+	 *
+	 * @param integer $order_id
+	 * @param string $order_old_status
+	 * @param string $order_new_status
+	 * @param \WC_Order $order
+	 *
+	 * @return void
+	 */
+	public function maybe_create_payment( $order_id, $order_old_status, $order_new_status, $order ) {
+		if ( 'cod' !== $order->get_payment_method() ) {
+			return;
+		}
+
+		if ( $order_new_status === 'completed' ) {
+			$external_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+
+			if ( $external_id ) {
+				$api_order = $this->get_api_order( $order );
+
+				if ( $api_order && empty( $api_order->Payments ) ) {
+					$payment = $this->get_api()->create_payment( $api_order->Header->InvoiceNo, $api_order->Header->ReferenceNo, $api_order->Header->TotalSum, $api_order->Header->CustomerName );
+
+					if ( ! empty( $payment->InvoiceId ) ) {
+						$this->get_plugin()->add_order_note(
+							$order,
+							__( 'Created payment.', 'konekt-merit-aktiva' )
+						);
+					}
+				}
 			}
 		}
 	}
