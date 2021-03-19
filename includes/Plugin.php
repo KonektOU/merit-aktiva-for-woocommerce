@@ -320,6 +320,24 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 
 	/**
+	 * Remove order meta
+	 *
+	 * @param WC_Order $order
+	 * @param array $meta_keys
+	 *
+	 * @return void
+	 */
+	public function remove_order_meta( \WC_Order $order, $meta_keys ) {
+
+		foreach ( $meta_keys as $meta_key ) {
+			$order->delete_meta_data( $this->get_meta_key( $meta_key ) );
+		}
+
+		$order->save_meta_data();
+	}
+
+
+	/**
 	 * Add note to order
 	 *
 	 * @param \WC_Order $order

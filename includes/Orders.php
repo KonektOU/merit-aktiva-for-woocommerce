@@ -24,8 +24,9 @@ class Orders {
 			add_filter( 'woocommerce_order_actions', array( $this, 'add_order_view_action' ), 90, 1 );
 			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
 
-			// Maybe create invoice when order status is okay
+			// Maybe create or delete invoice when order status is okay
 			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_delete_invoice' ), 20, 4 );
 
 			// Refund orders when needed
 			add_action( 'woocommerce_order_refunded', array( $this, 'refund_order' ), 20, 2 );
@@ -129,6 +130,42 @@ class Orders {
 			$this->resync_order_products_stock( $order );
 		} elseif ( 'refunded' === $order_new_status ) {
 			//
+		}
+	}
+
+
+	/**
+	 * Delete invoice (if order status is okay)
+	 *
+	 * @param integer $order_id
+	 * @param string $order_old_status
+	 * @param string $order_new_status
+	 * @param \WC_Order $order
+	 *
+	 * @return void
+	 */
+	public function maybe_delete_invoice( $order_id, $order_old_status, $order_new_status, $order ) {
+
+		if ( 'yes' !== $this->integration->get_option( 'invoice_delete_cancelled', 'no' ) ) {
+			return;
+		}
+
+		if ( $order_new_status === 'cancelled' ) {
+			$external_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+
+			if ( $external_id ) {
+				$this->get_api()->delete_invoice( $order_id, $external_id );
+
+				$this->get_plugin()->add_order_note(
+					$order,
+					sprintf(
+						__( 'Order cancelled. Deleted invoice with ID %s.', 'konekt-merit-aktiva' ),
+						$external_id
+					)
+				);
+
+				$this->get_plugin()->remove_order_meta( $order, [ 'invoice_id', 'customer_id' ] );
+			}
 		}
 	}
 

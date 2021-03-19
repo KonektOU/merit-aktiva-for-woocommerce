@@ -124,11 +124,19 @@ class Integration extends \WC_Integration {
 			],
 
 			'invoice_sync_onhold' => [
-				'title'   => __( 'On-hold sync', 'konekt-merit-aktiva' ),
+				'title'   => __( 'Sync on-hold', 'konekt-merit-aktiva' ),
 				'type'    => 'checkbox',
 				'default' => 'no',
 				'value'   => 'yes',
 				'label'   => __( 'Sync orders with on-hold status.', 'konekt-merit-aktiva' ),
+			],
+
+			'invoice_delete_cancelled' => [
+				'title'   => __( 'Delete cancelled', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Delete invoices if order is marked as cancelled.', 'konekt-merit-aktiva' ),
 			],
 
 			'invoice_shipping_sku' => [
