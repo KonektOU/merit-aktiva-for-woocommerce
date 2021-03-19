@@ -25,9 +25,12 @@ class Orders {
 			add_action( 'woocommerce_order_action_wc_' . $this->get_plugin()->get_id() . '_submit_order_action', array( $this, 'process_order_submit_action' ), 90, 1 );
 
 			// Maybe create or delete invoice when order status is okay
-			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_invoice' ), 20, 4 );
-			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_delete_invoice' ), 21, 4 );
-			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_payment' ), 22, 4 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'schedule_order_actions' ), 20, 3 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_delete_invoice' ), 21, 3 );
+			add_action( 'woocommerce_order_status_changed', array( $this, 'maybe_create_payment' ), 22, 3 );
+
+			// Hook into scheduled order actions
+			add_action( $this->get_plugin()->get_id() . '_scheduled_order_action', array( $this, 'maybe_create_invoice' ), 20, 3 );
 
 			// Refund orders when needed
 			add_action( 'woocommerce_order_refunded', array( $this, 'refund_order' ), 20, 2 );
@@ -46,6 +49,11 @@ class Orders {
 			// Validate products in cart
 			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products' ), 10, 2 );
 		}
+	}
+
+
+	public function schedule_order_actions( $order_id, $order_old_status, $order_new_status ) {
+		as_enqueue_async_action( $this->get_plugin()->get_id() . '_scheduled_order_action', compact( 'order_id', 'order_old_status', 'order_new_status' ), $this->get_plugin()->get_id() );
 	}
 
 
@@ -113,15 +121,16 @@ class Orders {
 	 * @param itneger $order_id
 	 * @param string $order_old_status
 	 * @param string $order_new_status
-	 * @param \WC_Order $order
 	 *
 	 * @return void
 	 */
-	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status, $order ) {
+	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status ) {
 
 		if ( 'yes' !== $this->integration->get_option( 'invoice_sync_allowed', 'no' ) ) {
 			return;
 		}
+
+		$order = wc_get_order( $order_id );
 
 		if (
 			( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' !== $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
@@ -141,15 +150,16 @@ class Orders {
 	 * @param integer $order_id
 	 * @param string $order_old_status
 	 * @param string $order_new_status
-	 * @param \WC_Order $order
 	 *
 	 * @return void
 	 */
-	public function maybe_delete_invoice( $order_id, $order_old_status, $order_new_status, $order ) {
+	public function maybe_delete_invoice( $order_id, $order_old_status, $order_new_status ) {
 
 		if ( 'yes' !== $this->integration->get_option( 'invoice_delete_cancelled', 'no' ) ) {
 			return;
 		}
+
+		$order = wc_get_order( $order_id );
 
 		if ( $order_new_status === 'cancelled' ) {
 			$external_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
@@ -166,6 +176,7 @@ class Orders {
 				);
 
 				$this->get_plugin()->remove_order_meta( $order, [ 'invoice_id', 'customer_id' ] );
+				$this->resync_order_products_stock( $order );
 			}
 		}
 	}
@@ -177,12 +188,13 @@ class Orders {
 	 * @param integer $order_id
 	 * @param string $order_old_status
 	 * @param string $order_new_status
-	 * @param \WC_Order $order
 	 *
 	 * @return void
 	 */
-	public function maybe_create_payment( $order_id, $order_old_status, $order_new_status, $order ) {
-		if ( 'cod' !== $order->get_payment_method() ) {
+	public function maybe_create_payment( $order_id, $order_old_status, $order_new_status ) {
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order || 'cod' !== $order->get_payment_method() ) {
 			return;
 		}
 
