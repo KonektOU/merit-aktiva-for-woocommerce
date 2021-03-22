@@ -313,7 +313,7 @@ class Orders {
 					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 				}
 
-				if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) == 0 ) {
+				if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) <= 0 ) {
 					$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
 				}
 			}
