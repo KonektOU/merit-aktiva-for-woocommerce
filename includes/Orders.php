@@ -302,18 +302,19 @@ class Orders {
 
 	public function validate_cart_products( $data, $errors ) {
 		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
-			$_product = apply_filters( 'woocommerce_cart_item_product', $cart_item['data'], $cart_item, $cart_item_key );
+			$product_id = $this->integration->get_wpml_original_post_id( $cart_item['product_id'] );
+			$product    = wc_get_product( $product_id );
 
-			if ( $_product ) {
-				$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $_product );
+			if ( $product ) {
+				$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 
 				if ( empty( $product_quantities ) ) {
-					$this->integration->manually_update_product_stock_data( $_product );
-					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $_product );
+					$this->integration->manually_update_product_stock_data( $product );
+					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 				}
 
 				if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) == 0 ) {
-					$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $_product->get_name() ) );
+					$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
 				}
 			}
 		}
