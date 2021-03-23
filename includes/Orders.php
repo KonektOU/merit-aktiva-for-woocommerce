@@ -194,18 +194,24 @@ class Orders {
 	public function maybe_create_payment( $order_id, $order_old_status, $order_new_status ) {
 		$order = wc_get_order( $order_id );
 
-		if ( ! $order || 'cod' !== $order->get_payment_method() ) {
+		if ( ! $order || ! in_array( $order->get_payment_method(), [ 'cod', 'bacs' ] ) ) {
 			return;
 		}
 
-		if ( $order_new_status === 'completed' ) {
+		if ( ( 'cod' === $order->get_payment_method() && $order_new_status === 'completed' ) || ( 'bacs' === $order->get_payment_method() && 'processing' === $order_new_status ) ) {
 			$external_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
 
 			if ( $external_id ) {
 				$api_order = $this->get_api_order( $order );
 
 				if ( $api_order && empty( $api_order->Payments ) ) {
-					$payment = $this->get_api()->create_payment( $api_order->Header->InvoiceNo, $api_order->Header->ReferenceNo, $api_order->Header->TotalSum, $api_order->Header->CustomerName );
+					$bank_name = null;
+
+					if ( 'bacs' === $order->get_payment_method() ) {
+						$bank_name = $this->integration->get_option( 'invoice_payment_method_name', '' );
+					}
+
+					$payment = $this->get_api()->create_payment( $api_order->Header->InvoiceNo, $api_order->Header->ReferenceNo, $api_order->Header->TotalSum, $api_order->Header->CustomerName, $bank_name );
 
 					if ( ! empty( $payment->InvoiceId ) ) {
 						$this->get_plugin()->add_order_note(

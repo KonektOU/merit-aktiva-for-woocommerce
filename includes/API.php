@@ -593,17 +593,65 @@ class API extends Framework\SV_WC_API_Base {
 	}
 
 
-	public function create_payment( $invoice_no, $reference_number, $amount, $customer_name ) {
+
+	/**
+	 * Create payment
+	 *
+	 * @since 1.0.15
+	 *
+	 * @param string $invoice_no
+	 * @param string $reference_number
+	 * @param float $amount
+	 * @param string $customer_name
+	 * @param string $bank_name
+	 *
+	 * @return object
+	 */
+	public function create_payment( $invoice_no, $reference_number, $amount, $customer_name, $bank_name = null ) {
+		$data = [
+			'InvoiceNo'    => $invoice_no,
+			'Amount'       => $amount,
+			'RefNo'        => $reference_number,
+			'CustomerName' => $customer_name,
+		];
+
+		if ( ! empty( $bank_name ) ) {
+			$banks = $this->get_banks();
+
+			if ( is_array( $banks ) ) {
+				$banks_ibans = wc_list_pluck( $banks, 'IBANCode', 'Name' );
+
+				if ( array_key_exists( $bank_name, $banks_ibans ) ) {
+					$data['IBAN'] = $banks_ibans[ $bank_name ];
+				}
+			}
+		}
+
 		$request = $this->perform_request(
 			$this->get_new_request( [
 				'method' => 'POST',
 				'path'   => 'sendpayment',
-				'data'   => [
-					'InvoiceNo'    => $invoice_no,
-					'Amount'       => $amount,
-					'RefNo'        => $reference_number,
-					'CustomerName' => $customer_name,
-				],
+				'data'   => $data,
+			] )
+		);
+
+		return empty( $request ) ? null : $request->response_data;
+	}
+
+
+	/**
+	 * Get banks
+	 *
+	 * @since 1.0.16
+	 *
+	 * @return object
+	 */
+	public function get_banks() {
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'method' => 'POST',
+				'path'   => 'getbanks',
+				'data'   => [],
 			] )
 		);
 
