@@ -308,7 +308,7 @@ class Orders {
 
 	public function validate_cart_products( $data, $errors ) {
 		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
-			$product_id = $this->integration->get_wpml_original_post_id( $cart_item['product_id'] );
+			$product_id = $this->integration->get_wpml_original_post_id( $cart_item['data']->get_id() );
 			$product    = wc_get_product( $product_id );
 
 			if ( $product ) {
