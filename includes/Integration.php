@@ -145,19 +145,6 @@ class Integration extends \WC_Integration {
 				'default'     => '',
 			],
 
-			'invoice_payment_method_name' => [
-				'title'       => __( 'Payment method name', 'konekt-merit-aktiva' ),
-				'type'        => 'text',
-				'default'     => '',
-				'description' => __( 'This will override the payment method title from WooCommerce. Leave empty for WooCommerce title.', 'konekt-merit-aktiva' ),
-			],
-
-			'cod_payment_method_name' => [
-				'title'       => __( 'Cash of Delivery method name', 'konekt-merit-aktiva' ),
-				'type'        => 'text',
-				'default'     => '',
-			],
-
 			// Stock
 			'stock_section_title' => [
 				'title' => __( 'Stock management configuration', 'konekt-merit-aktiva' ),
@@ -292,6 +279,12 @@ class Integration extends \WC_Integration {
 				'title'       => __( 'Taxes', 'konekt-merit-aktiva' ),
 				'type'        => 'tax_mapping_table',
 				'description' => __( 'Match all WooCommerce taxes with Merit Aktiva taxes. You can find TaxId from Merit Aktiva settings.', 'konekt-merit-aktiva' ),
+			];
+
+			$this->form_fields['payment_methods'] = [
+				'title'       => __( 'Payment methods', 'konekt-merit-aktiva' ),
+				'type'        => 'payment_methods_mapping_table',
+				'description' => __( 'Map WooCommerce payment methods to Merit Aktiva banks.', 'konekt-merit-aktiva' ),
 			];
 		}
 	}
@@ -977,6 +970,101 @@ class Integration extends \WC_Integration {
 	}
 
 
+	public function generate_payment_methods_mapping_table_html( $key, $data ) {
+		$field_key      = $this->get_field_key( $key );
+		$default_args   = [
+			'title'             => '',
+			'disabled'          => false,
+			'class'             => '',
+			'css'               => '',
+			'placeholder'       => '',
+			'desc_tip'          => false,
+			'description'       => '',
+			'custom_attributes' => [],
+		];
+		$data        = wp_parse_args( $data, $default_args );
+		$row_counter = 0;
+		$values      = (array) $this->get_option( $key, array() );
+
+		ob_start();
+		?>
+
+		<tr valign="top">
+			<th scope="row" class="titledesc">
+				<label for="<?php echo esc_attr( $field_key ); ?>"><?php echo wp_kses_post( $data['title'] ); ?> <?php echo $this->get_tooltip_html( $data ); // WPCS: XSS ok. ?></label>
+			</th>
+			<td class="forminp">
+
+				<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
+
+				<table class="">
+
+					<thead>
+						<tr>
+							<th width="100">#</th>
+							<th><?php esc_html_e( 'Payment Method', 'konekt-merit-aktiva' ); ?></th>
+							<th><?php esc_html_e( 'Bank', 'konekt-merit-aktiva' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+
+						<?php foreach ( WC()->payment_gateways()->get_available_payment_gateways() as $gateway_id => $gateway ) : ?>
+
+							<?php
+							$row_counter++;
+
+							$value = $values[ $gateway_id ] ?? false;
+
+							if ( empty( $value ) && 'cod' === $gateway_id ) {
+								$value = $this->get_option( 'cod_payment_method_name', false );
+							}
+							else {
+								$value = $this->get_option( 'invoice_payment_method_name', false );
+							}
+							?>
+
+							<tr>
+								<td><?php echo $row_counter; ?>.</td>
+								<td><?php echo esc_html( $gateway->get_title() ); ?></td>
+								<td>
+									<select name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $gateway_id ); ?>]">
+										<option value="">- <?php esc_html_e( 'Do not overwrite', 'konekt-merit-aktiva' ) ?> -</option>
+
+										<?php foreach ( $this->get_api()->get_banks() as $bank ) : ?>
+											<option value="<?php echo esc_attr( $bank->Name ); ?>" <?php selected( $value, $bank->Name, true ) ?>><?php echo esc_html( $bank->Name ); ?></option>
+										<?php endforeach; ?>
+
+										<option value="Kassa" <?php selected( $value, 'Kassa' ) ?>>Kassa</option>
+									</select>
+								</td>
+							</tr>
+
+						<?php endforeach; ?>
+
+					</tbody>
+
+				</table>
+			</td>
+		</tr>
+
+		<?php
+		return ob_get_clean();
+	}
+
+
+	/**
+	 * Validate payment_methods mapping table field.
+	 *
+	 * @param  string $key Field key.
+	 * @param  string $value Posted Value.
+	 * @return string|array
+	 */
+	public function validate_payment_methods_mapping_table_field( $key, $value ) {
+
+		return $this->validate_multiselect_field( $key, $value );
+	}
+
+
 	public function generate_tax_mapping_table_html( $key, $data ) {
 		$field_key      = $this->get_field_key( $key );
 		$default_args   = [
@@ -989,11 +1077,9 @@ class Integration extends \WC_Integration {
 			'description'       => '',
 			'custom_attributes' => [],
 		];
-		$data           = wp_parse_args( $data, $default_args );
-		$external_taxes = (array) $this->get_taxes();
-		$row_counter    = 0;
-		$wc_taxes       = $this->get_all_tax_rates();
-		$values         = (array) $this->get_option( $key, array() );
+		$data        = wp_parse_args( $data, $default_args );
+		$row_counter = 0;
+		$values      = (array) $this->get_option( $key, array() );
 
 		ob_start();
 		?>
@@ -1086,6 +1172,23 @@ class Integration extends \WC_Integration {
 		}
 
 		return $rates;
+	}
+
+
+	public function get_matching_bank_account( $payment_method ) {
+		$payment_methods = $this->get_option( 'payment_methods', [] );
+
+		if ( array_key_exists( $payment_method, $payment_methods ) ) {
+			return $payment_methods[ $payment_method ];
+		}
+		else {
+			if ( 'cod' === $payment_method ) {
+				return $this->get_option( 'cod_payment_method_name', null );
+			}
+			else {
+				return $this->get_option( 'invoice_payment_method_name', null );
+			}
+		}
 	}
 
 

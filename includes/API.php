@@ -310,12 +310,8 @@ class API extends Framework\SV_WC_API_Base {
 					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
 				];
 
-				if ( ! empty( $this->integration->get_option( 'invoice_payment_method_name', '' ) ) ) {
-					$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'invoice_payment_method_name', '' );
-				}
-
-				if ( 'cod' === $order->get_payment_method() ) {
-					$invoice['Payment']['PaymentMethod'] = $this->integration->get_option( 'cod_payment_method_name', '' );
+				if ( ! empty( $payment_method = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
+					$invoice['Payment']['PaymentMethod'] = $payment_method;
 				}
 			}
 		}
