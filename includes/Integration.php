@@ -499,7 +499,11 @@ class Integration extends \WC_Integration {
 
 		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
 			foreach ( $this->get_warehouses() as $key => $warehouse ) {
-				//$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], 'twicedaily' );
+				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], 'twicedaily', time() + ( DAY_IN_SECONDS / 2 ) );
+
+				if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
+					wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
+				}
 			}
 		}
 
@@ -518,10 +522,10 @@ class Integration extends \WC_Integration {
 			$this->get_plugin()->add_notice( 'manual_stock_sync', sprintf( __( 'Updating warehouse "%s" data.', 'konekt-merit-aktiva' ), $warehouse['title'] ) );
 		}
 
-		$time_start  = microtime( true );
-		$product_ids = $this->update_warehouse_products( true, [ $warehouse ] );
+		$time_start       = microtime( true );
+		$update_warehouse = $this->update_warehouse_products( true, [ $warehouse ] );
 
-		if ( ! empty( $product_ids ) ) {
+		if ( $update_warehouse ) {
 			$this->get_plugin()->schedule_action( 'product_update' );
 		}
 
@@ -630,7 +634,7 @@ class Integration extends \WC_Integration {
 			$warehouses = $this->get_warehouses();
 		}
 
-		$product_ids = [];
+		$updated = false;
 
 		foreach ( $warehouses as $warehouse ) {
 
@@ -660,31 +664,28 @@ class Integration extends \WC_Integration {
 							continue;
 						}
 
-						$product_id_by_sku = $this->get_product_id_by_sku( $product_sku );
-						$product_data      = [
+						$product_data = [
 							'Type'              => $product->Type,
 							'InventoryQty'      => $product->InventoryQty,
 							'ItemId'            => $product->ItemId,
 							'UnitofMeasureName' => $product->UnitofMeasureName,
 						];
 
-						if ( $product_id_by_sku ) {
-							// Just init product so it will be updated
-							$product_data['ProductID'] = $product_id_by_sku;
-							$product_ids []            = $product_id_by_sku;
-						}
-
 						$cleaned_data[ $product_sku ] = (object) $product_data;
 					}
 				}
 
-				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s)', $warehouse['title'], $warehouse['id'] ) );
+				if ( ! empty( $cleaned_data ) ) {
+					$updated = true;
+				}
+
+				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s). Total of products %d.', $warehouse['title'], $warehouse['id'], count( $cleaned_data ) ) );
 
 				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
 			}
 		}
 
-		return $product_ids;
+		return $updated;
 	}
 
 
