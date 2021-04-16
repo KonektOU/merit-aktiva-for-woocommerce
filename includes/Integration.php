@@ -561,10 +561,10 @@ class Integration extends \WC_Integration {
 
 				if ( $product->is_type( 'variable' ) ) {
 					$product->sync_stock_status( $product );
+				}
 
-					if ( ! empty( $product->get_changes() ) ) {
-						$product->save();
-					}
+				if ( ! empty( $product->get_changes() ) ) {
+					$product->save();
 				}
 			}
 		}
