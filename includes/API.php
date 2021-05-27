@@ -538,7 +538,7 @@ class API extends Framework\SV_WC_API_Base {
 		$response = empty( $request ) ? null : reset( $request->response_data );
 
 		if ( $response && $response->Code !== $product_sku ) {
-			$this->get_plugin()->log( sprintf( 'Wrong item stock fetched. Tried %s, got %s.', $product_sku, $response->Code ) );
+			$this->get_plugin()->log( sprintf( 'Wrong item data fetched. Tried %s, got %s.', $product_sku, $response->Code ) );
 
 			return false;
 		}
@@ -587,7 +587,6 @@ class API extends Framework\SV_WC_API_Base {
 
 		return empty( $request ) ? null : $request->response_data;
 	}
-
 
 
 	/**

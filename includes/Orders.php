@@ -312,15 +312,19 @@ class Orders {
 			$product    = wc_get_product( $product_id );
 
 			if ( $product ) {
-				$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+				$api_product = $this->get_api()->get_item( $product->get_sku() );
 
-				if ( empty( $product_quantities ) ) {
-					$this->integration->manually_update_product_stock_data( $product );
+				if ( $api_product && $api_product->Type == 'Laokaup' ) {
 					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
-				}
 
-				if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) <= 0 ) {
-					$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
+					if ( empty( $product_quantities ) ) {
+						$this->integration->manually_update_product_stock_data( $product );
+						$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+					}
+
+					if ( empty( $product_quantities ) || array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) <= 0 ) {
+						$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
+					}
 				}
 			}
 		}
