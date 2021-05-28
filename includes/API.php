@@ -215,6 +215,7 @@ class API extends Framework\SV_WC_API_Base {
 
 			if ( $refund ) {
 				$order_row['ItemCostAmount'] = $this->format_number( $order_row['Price'] );
+				$order_row['Price'] = abs( $order_row['Price'] );
 
 				if ( (float) $order_row['Quantity'] > 0 ) {
 					$order_row['Quantity'] = $this->format_number( 0 - (float) $order_row['Quantity'] );
