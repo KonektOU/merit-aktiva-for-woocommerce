@@ -275,7 +275,7 @@ class API extends Framework\SV_WC_API_Base {
 			],
 
 			// Invoice data
-			'DocDate'         => $order->get_date_created()->format( 'YmdHis' ),
+			'DocDate'         => $refund ? $refund->get_date_created()->format( 'YmdHis' ) : $order->get_date_created()->format( 'YmdHis' ),
 			'RefNo'           => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_reference_number', $reference_number ),
 			'InvoiceNo'       => ( $refund ? 'C' : '' ) . $order->get_order_number(),
 			'CurrencyCode'    => $order->get_currency(),
