@@ -748,7 +748,7 @@ class Integration extends \WC_Integration {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\API
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\API
 	 */
 	public function get_api() {
 

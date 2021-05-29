@@ -87,7 +87,7 @@ class Product_Data_Store {
 	/**
 	 * Get plugin
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Plugin
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Plugin
 	 */
 	protected function get_plugin() {
 		return wc_konekt_woocommerce_merit_aktiva();
@@ -97,7 +97,7 @@ class Product_Data_Store {
 	/**
 	 * Get API connector
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\API
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\API
 	 */
 	protected function get_api() {
 		return $this->get_integration()->get_api();
@@ -107,7 +107,7 @@ class Product_Data_Store {
 	/**
 	 * Get integration
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Integration
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Integration
 	 */
 	protected function get_integration() {
 		return $this->get_plugin()->get_integration();

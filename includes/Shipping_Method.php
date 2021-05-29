@@ -105,7 +105,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 	/**
 	 * Get integration
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Integration
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Integration
 	 */
 	protected function get_integration() {
 		return $this->get_plugin()->get_integration();
@@ -115,7 +115,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 	/**
 	 * Get plugin
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Plugin
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Plugin
 	 */
 	protected function get_plugin() {
 		return wc_konekt_woocommerce_merit_aktiva();

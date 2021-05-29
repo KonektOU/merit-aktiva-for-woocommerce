@@ -760,7 +760,7 @@ class API extends Framework\SV_WC_API_Base {
 	/**
 	 * Get plugin
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Plugin
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Plugin
 	 */
 	protected function get_plugin() {
 		return wc_konekt_woocommerce_merit_aktiva();

@@ -13,6 +13,11 @@ defined( 'ABSPATH' ) or exit;
 class Orders {
 
 
+	/**
+	 * Integration instance
+	 *
+	 * @var \Konekt\WooCommerce\Merit_Aktiva\Integration
+	 */
 	public $integration;
 
 
@@ -209,8 +214,8 @@ class Orders {
 				if ( $api_order && empty( $api_order->Payments ) ) {
 					$bank_name = null;
 
-					if ( 'bacs' === $order->get_payment_method() ) {
-						$bank_name = $this->integration->get_option( 'invoice_payment_method_name', '' );
+					if ( ! empty( $replaced_bank_name = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
+						$bank_name = $replaced_bank_name;
 					}
 
 					$payment = $this->get_api()->create_payment( $api_order->Header->InvoiceNo, $api_order->Header->ReferenceNo, $api_order->Header->TotalSum, $api_order->Header->CustomerName, $bank_name );
@@ -375,7 +380,7 @@ class Orders {
 	/**
 	 * Get plugin
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\Plugin
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Plugin
 	 */
 	protected function get_plugin() {
 		return wc_konekt_woocommerce_merit_aktiva();
@@ -385,7 +390,7 @@ class Orders {
 	/**
 	 * Get API connector
 	 *
-	 * @return Konekt\WooCommerce\Merit_Aktiva\API
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\API
 	 */
 	protected function get_api() {
 		return $this->integration->get_api();
