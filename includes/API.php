@@ -321,7 +321,7 @@ class API extends Framework\SV_WC_API_Base {
 			$this->get_new_request( [
 				'method' => 'POST',
 				'path'   => 'sendinvoice',
-				'data'   => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_data', $invoice ),
+				'data'   => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_invoice_data', $invoice, $order, $refund ),
 			] )
 		);
 
