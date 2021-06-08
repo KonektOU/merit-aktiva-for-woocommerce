@@ -140,7 +140,8 @@ class Orders {
 		if (
 			( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' !== $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
 			 || ( 'on-hold' !== $order_old_status && $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
-			 || ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) ) {
+			 || ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
+			 || ( 'processing' !== $order_old_status && 'completed' === $order_new_status ) ) {
 			$this->get_api()->create_invoice( $order );
 			$this->resync_order_products_stock( $order );
 		} elseif ( 'refunded' === $order_new_status ) {

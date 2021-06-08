@@ -526,6 +526,7 @@ class Integration extends \WC_Integration {
 		$update_warehouse = $this->update_warehouse_products( true, [ $warehouse ] );
 
 		if ( $update_warehouse ) {
+			$this->get_plugin()->unschedule_all_actions( 'product_update' );
 			$this->get_plugin()->schedule_action( 'product_update' );
 		}
 
@@ -538,6 +539,9 @@ class Integration extends \WC_Integration {
 
 	public function cron_products_hook( $page = 1 ) {
 		$this->get_plugin()->log( sprintf( 'Fetching products for an update, page %d.', $page ), $this->get_plugin()->get_id() . '_update-products' );
+
+		// Remove existing product updates
+		$this->get_plugin()->unschedule_all_actions( 'product_update' );
 
 		$results = wc_get_products( [
 			'type'     => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),
