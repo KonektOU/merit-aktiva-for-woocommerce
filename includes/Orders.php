@@ -207,9 +207,10 @@ class Orders {
 		if ( ( 'cod' === $order->get_payment_method() && $order_new_status === 'completed' ) ||
 			( in_array( $order->get_payment_method(), [ 'bacs', 'cheque' ] ) && 'processing' === $order_new_status ) ) {
 
-			$external_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+			$external_id    = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+			$create_payment = apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_create_payment', true, $order_id, $external_id );
 
-			if ( $external_id ) {
+			if ( $create_payment && $external_id ) {
 				$api_order = $this->get_api_order( $order );
 
 				if ( $api_order && empty( $api_order->Payments ) ) {
