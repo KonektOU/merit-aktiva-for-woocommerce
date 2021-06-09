@@ -514,11 +514,12 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function cron_hook( $warehouse, $manual = false ) {
+	public function cron_hook( $warehouse, $manual_update = false ) {
 
 		$this->get_plugin()->log( 'Starting cron' );
 
-		if ( true === $manual ) {
+		if ( true === $manual_update ) {
+			$this->get_plugin()->unschedule_all_actions( 'product_update' );
 			$this->get_plugin()->add_notice( 'manual_stock_sync', sprintf( __( 'Updating warehouse "%s" data.', 'konekt-merit-aktiva' ), $warehouse['title'] ) );
 		}
 
@@ -527,7 +528,7 @@ class Integration extends \WC_Integration {
 
 		if ( $update_warehouse ) {
 			$this->get_plugin()->unschedule_all_actions( 'product_update' );
-			$this->get_plugin()->schedule_action( 'product_update' );
+			$this->get_plugin()->schedule_action( 'product_update', [ 1, $manual_update ] );
 		}
 
 		$time_end = microtime( true );
@@ -537,7 +538,7 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function cron_products_hook( $page = 1 ) {
+	public function cron_products_hook( $page = 1, $manual_update = false ) {
 		$this->get_plugin()->log( sprintf( 'Fetching products for an update, page %d.', $page ), $this->get_plugin()->get_id() . '_update-products' );
 
 		// Remove existing product updates
@@ -574,7 +575,9 @@ class Integration extends \WC_Integration {
 		}
 
 		// Show informational notice
-		$this->get_plugin()->add_notice( 'manual_stock_sync', sprintf( 'Updated %d products, page %d of %d. Total products %d.', count( $results->products ), $page, $results->max_num_pages, $results->total ) );
+		if ( true === $manual_update ) {
+			$this->get_plugin()->add_notice( 'manual_stock_sync', sprintf( 'Updated %d products, page %d of %d. Total products %d.', count( $results->products ), $page, $results->max_num_pages, $results->total ) );
+		}
 
 		$this->get_plugin()->log( sprintf( __( 'Updated %d products, page %d of %d. Total products %d.', 'konekt-merit-aktiva' ), count( $results->products ), $page, $results->max_num_pages, $results->total ), $this->get_plugin()->get_id() . '_update-products' );
 
@@ -583,7 +586,10 @@ class Integration extends \WC_Integration {
 		}
 		elseif ( $results->max_num_pages == $page ) {
 			$this->get_plugin()->log( sprintf( 'End of product updates. Updated total of %d.', $results->total ), $this->get_plugin()->get_id() . '_update-products' );
-			$this->get_plugin()->add_notice( 'manual_stock_sync', __( 'Finished product stock syncing.', 'konekt-merit-aktiva' ) );
+
+			if ( true === $manual_update ) {
+				$this->get_plugin()->add_notice( 'manual_stock_sync', __( 'Finished product stock syncing.', 'konekt-merit-aktiva' ) );
+			}
 		}
 	}
 
