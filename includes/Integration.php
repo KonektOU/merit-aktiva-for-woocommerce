@@ -499,7 +499,7 @@ class Integration extends \WC_Integration {
 
 		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
 			foreach ( $this->get_warehouses() as $key => $warehouse ) {
-				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], 'twicedaily', time() + ( DAY_IN_SECONDS / 2 ) );
+				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) );
 
 				if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
 					wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
