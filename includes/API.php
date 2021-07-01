@@ -127,7 +127,7 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
 			}
 
-			if ( $order_item->get_total( 'edit' ) > 0 && $order_item->get_total_tax() == 0 ) {
+			if ( ( $order_item->get_total( 'edit' ) > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $order_item->get_total_tax() == 0 ) {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
 			}
 
