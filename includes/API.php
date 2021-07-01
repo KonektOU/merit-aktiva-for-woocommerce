@@ -262,17 +262,24 @@ class API extends Framework\SV_WC_API_Base {
 			];
 		}
 
+		// Prepare customer data
+		$customer_data = [
+			'Name'          => $order->get_formatted_billing_full_name(),
+			'NotTDCustomer' => 'true',
+			'Address'       => WC()->countries->get_formatted_address( $customer_address, ', ' ),
+			'CountryCode'   => $order->get_billing_country(),
+			'PhoneNo'       => $order->get_billing_phone(),
+			'Email'         => $order->get_billing_email(),
+		];
+
+		if ( ! empty( $order->get_billing_company() ) ) {
+			$customer_data['Name'] = $order->get_billing_company();
+		}
+
 		// Prepare invoice data
 		$invoice = [
 			// Customer data
-			'Customer' => [
-				'Name'          => $order->get_formatted_billing_full_name(),
-				'NotTDCustomer' => 'true',
-				'Address'       => WC()->countries->get_formatted_address( $customer_address, ', ' ),
-				'CountryCode'   => $order->get_billing_country(),
-				'PhoneNo'       => $order->get_billing_phone(),
-				'Email'         => $order->get_billing_email(),
-			],
+			'Customer' => $customer_data,
 
 			// Invoice data
 			'DocDate'         => $refund ? $refund->get_date_created()->format( 'YmdHis' ) : $order->get_date_created()->format( 'YmdHis' ),
