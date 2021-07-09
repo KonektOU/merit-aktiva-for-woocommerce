@@ -1110,13 +1110,15 @@ class Integration extends \WC_Integration {
 
 				<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
 
-				<table class="">
+				<table class="form-table">
 
 					<thead>
 						<tr>
-							<th width="100">#</th>
-							<th><?php esc_html_e( 'WooCommerce Tax', 'konekt-merit-aktiva' ); ?></th>
-							<th><?php esc_html_e( 'Tax ID', 'konekt-merit-aktiva' ); ?></th>
+							<td style="width: 35px"><strong>#</strong></td>
+							<td><strong><?php esc_html_e( 'WooCommerce Tax', 'konekt-merit-aktiva' ); ?></strong></td>
+							<td><strong><?php esc_html_e( 'Tax rate slug', 'konekt-merit-aktiva' ); ?></strong></td>
+							<td><strong><?php esc_html_e( 'Rate', 'konekt-merit-aktiva' ); ?></strong></td>
+							<td><strong><?php esc_html_e( 'Tax ID', 'konekt-merit-aktiva' ); ?></strong></td>
 						</tr>
 					</thead>
 					<tbody>
@@ -1131,7 +1133,14 @@ class Integration extends \WC_Integration {
 
 							<tr>
 								<td><?php echo $row_counter; ?>.</td>
-								<td><?php echo esc_html( $wc_tax['label'] ); ?></td>
+								<td>
+									<?php echo esc_html( $wc_tax['label'] ); ?>
+									<?php if ( ! empty( $wc_tax['country'] ) ) : ?>
+										&nbsp;(<?php echo esc_html( $wc_tax['country'] ); ?>)
+									<?php endif; ?>
+								</td>
+								<td><?php echo esc_html( $wc_tax['slug'] ); ?></td>
+								<td><?php echo esc_html( $wc_tax['rate'] ); ?>%</td>
 								<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $wc_tax_id ); ?>]" value="<?php echo esc_attr( $value ); ?>"></td>
 							</tr>
 
@@ -1140,7 +1149,9 @@ class Integration extends \WC_Integration {
 						<tr>
 							<td><?php echo $row_counter + 1; ?>.</td>
 							<td><?php echo esc_html_e( '0% tax', 'konekt-merit-aktiva' ); ?></td>
-							<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? self::DEFAULT_ZERO_TAX_ID ); ?>"></td>
+							<td></td>
+							<td>0%</td>
+							<td><input type="text" class="input-text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? self::DEFAULT_ZERO_TAX_ID ); ?>"></td>
 						</tr>
 
 					</tbody>
@@ -1182,9 +1193,10 @@ class Integration extends \WC_Integration {
 			foreach ( \WC_Tax::get_rates_for_tax_class( $tax_class ) as $rate ) {
 
 				$rates[ $rate->tax_rate_id ] = [
-					'label' => $rate->tax_rate_name,
-					'rate'  => $rate->tax_rate,
-					'slug'  => $tax_class,
+					'label'   => $rate->tax_rate_name,
+					'rate'    => $rate->tax_rate,
+					'slug'    => $tax_class,
+					'country' => $rate->tax_rate_country,
 				];
 			}
 		}
