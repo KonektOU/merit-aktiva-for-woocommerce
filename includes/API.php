@@ -131,7 +131,7 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
 			}
 
-			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax() > 0 ) {
+			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax() >= 0 ) {
 				$order_row['TaxId'] = $this->integration::DEFAULT_ESTONIAN_TAX_ID;
 			}
 
