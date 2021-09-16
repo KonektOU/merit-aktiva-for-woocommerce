@@ -701,7 +701,7 @@ class API extends Framework\SV_WC_API_Base {
 	 *
 	 * @return string
 	 */
-	private function generate_reference_number( $stamp ) {
+	public function generate_reference_number( $stamp ) {
 		$chcs = array( 7, 3, 1 );
 		$sum  = 0;
 		$pos  = 0;
