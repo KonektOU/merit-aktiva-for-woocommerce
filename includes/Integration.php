@@ -702,14 +702,14 @@ class Integration extends \WC_Integration {
 	/**
 	 * Get taxes
 	 *
-	 * @return void
+	 * @return array
 	 */
 	public function get_taxes() {
 		if ( false === ( $taxes = $this->get_plugin()->get_cache( 'taxes' ) ) ) {
 			$taxes = $this->get_api()->get_taxes();
 
 			if ( ! empty( $taxes ) ) {
-				$taxes = array_column( (array) $taxes, 'Code', 'Id' );
+				$taxes = (array) $taxes;
 			} else {
 				$taxes = [];
 			}
@@ -1015,11 +1015,11 @@ class Integration extends \WC_Integration {
 
 				<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
 
-				<table class="">
+				<table class="form-table">
 
 					<thead>
 						<tr>
-							<th width="100">#</th>
+							<th style="width: 35px;">#</th>
 							<th><?php esc_html_e( 'Payment Method', 'konekt-merit-aktiva' ); ?></th>
 							<th><?php esc_html_e( 'Bank', 'konekt-merit-aktiva' ); ?></th>
 						</tr>
@@ -1110,7 +1110,7 @@ class Integration extends \WC_Integration {
 
 				<?php echo $this->get_description_html( $data ); // WPCS: XSS ok. ?>
 
-				<table class="form-table">
+				<table class="form-table" style="table-layout: auto;">
 
 					<thead>
 						<tr>
@@ -1141,7 +1141,13 @@ class Integration extends \WC_Integration {
 								</td>
 								<td><?php echo esc_html( $wc_tax['slug'] ); ?></td>
 								<td><?php echo esc_html( $wc_tax['rate'] ); ?>%</td>
-								<td><input type="text" name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $wc_tax_id ); ?>]" value="<?php echo esc_attr( $value ); ?>"></td>
+								<td>
+									<select name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $wc_tax_id ); ?>]">
+										<?php foreach ( $this->get_taxes() as $tax_rate ) : ?>
+											<option value="<?php echo esc_attr( $tax_rate->Id ); ?>" <?php selected( $value, $tax_rate->Id ); ?>><?php echo esc_html( $tax_rate->Name ); ?> (<?php echo esc_html( $tax_rate->Code ); ?>, <?php echo esc_html( $tax_rate->TaxPct ); ?>%, <?php echo esc_html( $tax_rate->Id ); ?>)</option>
+										<?php endforeach; ?>
+									</select>
+								</td>
 							</tr>
 
 						<?php endforeach; ?>
@@ -1151,7 +1157,13 @@ class Integration extends \WC_Integration {
 							<td><?php echo esc_html_e( '0% tax', 'konekt-merit-aktiva' ); ?></td>
 							<td></td>
 							<td>0%</td>
-							<td><input type="text" class="input-text" name="<?php echo esc_attr( $field_key ); ?>[none]" value="<?php echo esc_attr( $values['none'] ?? self::DEFAULT_ZERO_TAX_ID ); ?>"></td>
+							<td>
+								<select name="<?php echo esc_attr( $field_key ); ?>[none]">
+									<?php foreach ( $this->get_taxes() as $tax_rate ) : ?>
+										<option value="<?php echo esc_attr( $tax_rate->Id ); ?>" <?php selected( $values['none'] ?? self::DEFAULT_ZERO_TAX_ID, $tax_rate->Id ); ?>><?php echo esc_html( $tax_rate->Name ); ?> (<?php echo esc_html( $tax_rate->Code ); ?>, <?php echo esc_html( $tax_rate->TaxPct ); ?>%, <?php echo esc_html( $tax_rate->Id ); ?>)</option>
+									<?php endforeach; ?>
+								</select>
+							</td>
 						</tr>
 
 					</tbody>
