@@ -20,6 +20,8 @@ class API extends Framework\SV_WC_API_Base {
 
 	const ITEM_TYPE_ITEM = 3;
 
+	const DEFAULT_PRODUCT_UOM = 'tk';
+
 
 	/**
 	 * API URL based on language
@@ -27,9 +29,15 @@ class API extends Framework\SV_WC_API_Base {
 	 * @var array
 	 */
 	private $api_urls = [
+		// Version 1 URLs
 		'estonian' => 'https://aktiva.merit.ee/api/v1/',
 		'finnish'  => 'https://aktiva.meritaktiva.fi/api/v1/',
 		'polish'   => 'https://program.360ksiegowosc.pl/api/v1/',
+
+		// Version 2 URLs
+		'estonian_v2' => 'https://aktiva.merit.ee/api/v2/',
+		'finnish_v2'  => 'https://aktiva.meritaktiva.fi/api/v2/',
+		'polish_v2'   => 'https://program.360ksiegowosc.pl/api/v2/',
 	];
 
 	/** @var \Konekt\WooCommerce\Merit_Aktiva\Integration the integration class instance */
@@ -201,7 +209,7 @@ class API extends Framework\SV_WC_API_Base {
 				if ( $product_uom ) {
 					$order_row['Item']['UOMName'] = $product_uom;
 				} else {
-					$order_row['Item']['UOMName'] = 'tk';
+					$order_row['Item']['UOMName'] = self::DEFAULT_PRODUCT_UOM;
 				}
 
 			} else {
@@ -435,12 +443,7 @@ class API extends Framework\SV_WC_API_Base {
 	public function create_products( $products ) {
 		do_action( 'konekt_merit_aktiva_create_products' );
 
-		/**
-		 * @var \WC_Order
-		 */
-		$order = \wc_create_order( [
-			'status' => 'pending',
-		] );
+		$items = [];
 
 		foreach ( $products as $product ) {
 			if ( $product->is_type( 'external' ) ) {
@@ -462,52 +465,51 @@ class API extends Framework\SV_WC_API_Base {
 						$variation_product->save();
 					}
 
-					$order->add_product( $variation_product, 1, [
-						'total'    => 0,
-						'subtotal' => 0,
-					] );
+					$product_uom = $this->get_plugin()->get_product_meta( $variation_product, 'uom_name' );
+
+					$items[] = [
+						'Type'            => self::ITEM_TYPE_STOCK_ITEM,
+						'Usage'           => 3,                                                               // Sales and purchases
+						'Code'            => $variation_product->get_sku(),
+						'Description'     => $variation_product->get_name(),
+						'UOMName'         => $product_uom ? $product_uom : self::DEFAULT_PRODUCT_UOM,
+						'DefLocationCode' => $this->integration->get_option( 'primary_warehouse_id', '1' ),
+					];
 				}
 			} else {
-				if ( ! $product->get_sku() ) {
-					continue;
-				}
+				$product_uom = $this->get_plugin()->get_product_meta( $product, 'uom_name' );
 
-				if ( ! $product->managing_stock() ) {
-					$product->set_manage_stock( true );
-					$product->save();
-				}
-
-				$order->add_product( $product, 1, [
-					'total'    => 0,
-					'subtotal' => 0,
-				] );
+				$items[] = [
+					'Type'            => self::ITEM_TYPE_STOCK_ITEM,
+					'Usage'           => 3,                                                               // Sales and purchases
+					'Code'            => $product->get_sku(),
+					'Description'     => $product->get_name(),
+					'UOMName'         => $product_uom ? $product_uom : self::DEFAULT_PRODUCT_UOM,
+					'DefLocationCode' => $this->integration->get_option( 'primary_warehouse_id', '1' ),
+				];
 			}
 		}
 
-		$customer = new \WC_Customer( get_current_user_id() );
+		// Prepare
+		$request = [
+			'Items' => $items,
+		];
 
-		$order->set_billing_address_1( $customer->get_billing_address_1() );
-		$order->set_billing_address_2( $customer->get_billing_address_2() );
-		$order->set_billing_country( $customer->get_billing_country() );
+		// Set v2 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) . '_v2' ];
 
-		$order->set_customer_id( get_current_user_id() );
-		$order->calculate_totals();
-		$order->save();
+		$response = $this->perform_request(
+			$this->get_new_request( [
+				'method' => 'POST',
+				'path'   => 'senditems',
+				'data'   => apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_create_products_data', $request, $products ),
+			] )
+		);
 
-		// Create invoice to Aktiva to save the products
-		$invoice = $this->create_invoice( $order, true );
+		// Set v1 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) ];
 
-		// Delete WC order
-		$order->delete( true );
-
-		if ( ! empty( $invoice['invoice_id'] ) ) {
-			// Delete invoice from Aktiva
-			$this->delete_invoice( false, $invoice['invoice_id'] );
-
-			return true;
-		}
-
-		return $invoice;
+		return 200 === $this->get_response_code() ? true : $response;
 	}
 
 

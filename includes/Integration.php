@@ -920,6 +920,10 @@ class Integration extends \WC_Integration {
 			$this->get_plugin()->delete_cache( 'create_products' );
 		}
 
+		if ( WC_Admin_Notices::has_notice( $this->get_plugin()->get_id() . '_create-products' ) ) {
+			WC_Admin_Notices::remove_notice( $this->get_plugin()->get_id() . '_create-products' );
+		}
+
 		if ( ! empty( $query_products->products ) ) {
 			$products = array_map( 'wc_get_product', $query_products->products );
 
@@ -950,15 +954,15 @@ class Integration extends \WC_Integration {
 
 				}
 			} else {
-				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $create_products, true ) ), $this->get_plugin()->get_id() . '_create-products' );
+				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $create_products->Message, true ) ), $this->get_plugin()->get_id() . '_create-products' );
 
 				$creation_errors  = $this->get_plugin()->get_cache( 'create_products' );
-				$creation_errors .= print_r( $create_products, true );
+				$creation_errors .= print_r( $create_products->Message ?? $create_products, true );
 
 				$this->get_plugin()->set_cache( 'create_products', $creation_errors, 0 );
 			}
 
-			if ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) {
+			if ( ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) && $query_products->max_num_pages != $current_page ) {
 				wp_safe_redirect( add_query_arg( [
 					'action'       => 'create-products',
 					'nonce'        => wp_create_nonce( 'create-products' ),
@@ -971,18 +975,19 @@ class Integration extends \WC_Integration {
 					$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
 				}
 
-				if ( $creation_errors ) {
-					if ( WC_Admin_Notices::has_notice( $this->get_plugin()->get_id() . '_create-products' ) ) {
-						WC_Admin_Notices::remove_notice( $this->get_plugin()->get_id() . '_create-products' );
-					}
+				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $creation_errors, true ) ), $this->get_plugin()->get_id() . '_create-products' );
 
+				if ( $creation_errors ) {
 					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', $creation_errors );
+				} else {
+					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Products created.', 'konekt-merit-aktiva' ) );
 				}
 
 				wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 			}
 		} else {
 			$this->get_plugin()->log( 'Did not find any products', $this->get_plugin()->get_id() . '_create-products' );
+			WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Did not find any products.', 'konekt-merit-aktiva' ) );
 		}
 	}
 
