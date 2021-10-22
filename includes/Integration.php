@@ -905,7 +905,7 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->log( sprintf( 'Starting manual product creation (page %d)', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
 
 		$query_products = wc_get_products( [
-			'limit'                => 50,
+			'limit'                => 100,
 			'paginate'             => true,
 			'page'                 => $current_page,
 			'type'                 => [ 'simple', 'variation' ],
@@ -977,7 +977,7 @@ class Integration extends \WC_Integration {
 
 				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $creation_errors, true ) ), $this->get_plugin()->get_id() . '_create-products' );
 
-				if ( $creation_errors ) {
+				if ( ! empty( $creation_errors ) ) {
 					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', $creation_errors );
 				} else {
 					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Products created.', 'konekt-merit-aktiva' ) );

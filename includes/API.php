@@ -474,6 +474,7 @@ class API extends Framework\SV_WC_API_Base {
 						'Description'     => $variation_product->get_name(),
 						'UOMName'         => $product_uom ? $product_uom : self::DEFAULT_PRODUCT_UOM,
 						'DefLocationCode' => $this->integration->get_option( 'primary_warehouse_id', '1' ),
+						'TaxId'           => $this->integration->get_matching_tax_code( $variation_product->get_tax_class() ),
 					];
 				}
 			} else {
@@ -486,6 +487,7 @@ class API extends Framework\SV_WC_API_Base {
 					'Description'     => $product->get_name(),
 					'UOMName'         => $product_uom ? $product_uom : self::DEFAULT_PRODUCT_UOM,
 					'DefLocationCode' => $this->integration->get_option( 'primary_warehouse_id', '1' ),
+					'TaxId'           => $this->integration->get_matching_tax_code( $product->get_tax_class() ),
 				];
 			}
 		}
