@@ -1196,6 +1196,7 @@ class Integration extends \WC_Integration {
 
 
 	public function get_all_tax_rates() {
+		global $wpdb;
 
 		$rates = \WC_Tax::get_rates();
 
@@ -1205,17 +1206,13 @@ class Integration extends \WC_Integration {
 			}
 		}
 
-		foreach ( \WC_Tax::get_tax_class_slugs() as $tax_class ) {
-
-			foreach ( \WC_Tax::get_rates_for_tax_class( $tax_class ) as $rate ) {
-
-				$rates[ $rate->tax_rate_id ] = [
-					'label'   => $rate->tax_rate_name,
-					'rate'    => $rate->tax_rate,
-					'slug'    => $tax_class,
-					'country' => $rate->tax_rate_country,
-				];
-			}
+		foreach ( $wpdb->get_results( "SELECT * FROM `{$wpdb->prefix}woocommerce_tax_rates` ORDER BY tax_rate_order" ) as $rate ) {
+			$rates[ $rate->tax_rate_id ] = [
+				'label'   => $rate->tax_rate_name,
+				'rate'    => $rate->tax_rate,
+				'slug'    => $rate->tax_rate_class,
+				'country' => $rate->tax_rate_country,
+			];
 		}
 
 		return $rates;
@@ -1239,7 +1236,7 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function get_matching_tax_code( $wc_tax_class ) {
+	public function get_matching_tax_code( $wc_tax_class, $billing_country = false ) {
 		$tax         = '';
 		$tax_rate_id = '';
 
@@ -1248,11 +1245,18 @@ class Integration extends \WC_Integration {
 		}
 		else {
 			foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
+				if ( $billing_country ) {
+					if ( $wc_tax_class == $rate['slug'] && $billing_country == $rate['country'] ) {
+						$tax_rate_id = $rate_id;
 
-				if ( $wc_tax_class == $rate['slug'] ) {
-					$tax_rate_id = $rate_id;
+						break;
+					}
+				} else {
+					if ( $wc_tax_class == $rate['slug'] ) {
+						$tax_rate_id = $rate_id;
 
-					break;
+						break;
+					}
 				}
 			}
 		}
