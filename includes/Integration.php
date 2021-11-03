@@ -1236,22 +1236,15 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function get_matching_tax_code( $wc_tax_class, $billing_country = false ) {
-		$tax         = '';
-		$tax_rate_id = '';
+	public function get_matching_tax_code( $wc_tax_class = null, $tax_rate_id = null ) {
+		if ( null === $tax_rate_id ) {
+			$tax_rate_id = '';
 
-		if ( 0 === $wc_tax_class ) {
-			$tax_rate_id = 'none';
-		}
-		else {
-			foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
-				if ( $billing_country ) {
-					if ( $wc_tax_class == $rate['slug'] && $billing_country == $rate['country'] ) {
-						$tax_rate_id = $rate_id;
-
-						break;
-					}
-				} else {
+			if ( 0 === $wc_tax_class ) {
+				$tax_rate_id = 'none';
+			}
+			else {
+				foreach ( $this->get_all_tax_rates() as $rate_id => $rate ) {
 					if ( $wc_tax_class == $rate['slug'] ) {
 						$tax_rate_id = $rate_id;
 
@@ -1275,7 +1268,7 @@ class Integration extends \WC_Integration {
 			return self::DEFAULT_ESTONIAN_TAX_ID;
 		}
 
-		return $tax;
+		return false;
 	}
 
 

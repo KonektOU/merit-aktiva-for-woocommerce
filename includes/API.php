@@ -128,8 +128,19 @@ class API extends Framework\SV_WC_API_Base {
 				],
 				'Quantity' => $this->format_number( $order_item->get_quantity() ),
 				'Price'    => round( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity(), 7 ),
-				'TaxId'    => $this->integration->get_matching_tax_code( $order_item->get_tax_class() ),
 			];
+
+			$item_taxes = $order_item->get_taxes();
+
+			foreach ( $item_taxes['total'] as $tax_id => $amount ) {
+				$tax_code = $this->integration->get_matching_tax_code( null, $tax_id );
+
+				if ( $tax_code ) {
+					$order_row['TaxId'] = $tax_code;
+
+					break;
+				}
+			}
 
 			if ( empty( $order_row['TaxId'] ) && 'inherit' === $order_item->get_tax_class() ) {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
