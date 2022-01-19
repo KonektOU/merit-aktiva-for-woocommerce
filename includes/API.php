@@ -148,6 +148,10 @@ class API extends Framework\SV_WC_API_Base {
 
 			if ( ( $order_item->get_total( 'edit' ) > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $order_item->get_total_tax() == 0 ) {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
+
+				if ( ! empty( $account_code = $this->integration->get_option( 'zero_tax_account_code', null ) ) ) {
+					$order_row['GLAccountCode'] = $account_code;
+				}
 			}
 
 			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax() >= 0 ) {

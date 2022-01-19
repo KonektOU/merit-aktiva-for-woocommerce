@@ -281,6 +281,12 @@ class Integration extends \WC_Integration {
 				'description' => __( 'Match all WooCommerce taxes with Merit Aktiva taxes. You can find TaxId from Merit Aktiva settings.', 'konekt-merit-aktiva' ),
 			];
 
+			$this->form_fields['zero_tax_account_code'] = [
+				'title'       => __( 'Zero tax account code', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'description' => __( 'Invoice rows with zero tax rate will have this account code applied. If not set, then it is not used.', 'konekt-merit-aktiva' ),
+			];
+
 			$this->form_fields['payment_methods'] = [
 				'title'       => __( 'Payment methods', 'konekt-merit-aktiva' ),
 				'type'        => 'payment_methods_mapping_table',
@@ -1220,7 +1226,7 @@ class Integration extends \WC_Integration {
 
 
 	public function get_matching_bank_account( $payment_method ) {
-		$payment_methods = $this->get_option( 'payment_methods', [] );
+		$payment_methods = (array) $this->get_option( 'payment_methods', [] );
 
 		if ( array_key_exists( $payment_method, $payment_methods ) ) {
 			return $payment_methods[ $payment_method ];
