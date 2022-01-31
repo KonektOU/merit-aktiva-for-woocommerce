@@ -30,12 +30,7 @@ class Response extends Framework\SV_WC_API_JSON_Response {
 	public function __construct( $raw_response_json ) {
 
 		$this->raw_response_json = $raw_response_json;
-
 		$this->response_data = json_decode( $raw_response_json );
-
-		if ( ! is_object( $this->response_data ) ) {
-			$this->response_data = json_decode( $this->response_data );
-		}
 	}
 
 
