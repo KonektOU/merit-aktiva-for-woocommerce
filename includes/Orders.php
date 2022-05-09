@@ -138,15 +138,29 @@ class Orders {
 		$order      = wc_get_order( $order_id );
 		$invoice_id = $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
 
-		if (
-			( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' !== $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
-			 || ( 'on-hold' !== $order_old_status && $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
-			 || ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) )
-			 || ( 'processing' !== $order_old_status && 'completed' === $order_new_status && ! $invoice_id ) ) {
+		$create_invoice = false;
+
+		if ( $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' !== $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) {
+			$create_invoice = true;
+		}
+
+		if ( 'on-hold' !== $order_old_status && $order_new_status === $this->integration->get_option( 'invoice_sync_status', 'processing' ) && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) {
+			$create_invoice = true;
+		}
+
+		if ( 'on-hold' === $order_new_status && 'yes' === $this->integration->get_option( 'invoice_sync_onhold', 'no' ) ) {
+			$create_invoice = true;
+		}
+
+		if ( 'processing' !== $order_old_status && 'completed' === $order_new_status && ! $invoice_id ) {
+			$create_invoice = true;
+		}
+
+		$create_invoice = apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_create_invoice', $create_invoice, $order, $invoice_id );
+
+		if ( true === $create_invoice ) {
 			$this->get_api()->create_invoice( $order );
 			$this->resync_order_products_stock( $order );
-		} elseif ( 'refunded' === $order_new_status ) {
-			//
 		}
 	}
 
