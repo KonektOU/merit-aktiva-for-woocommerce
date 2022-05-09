@@ -317,6 +317,10 @@ class Orders {
 
 
 	public function validate_cart_products( $data, $errors ) {
+		if ( 'yes' !== $this->integration->get_option( 'stock_sync_allowed', 'no' ) ) {
+			return;
+		}
+
 		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
 			$product_id = $this->integration->get_wpml_original_post_id( $cart_item['data']->get_id() );
 			$product    = wc_get_product( $product_id );
