@@ -911,7 +911,7 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->log( sprintf( 'Starting manual product creation (page %d)', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
 
 		$query_products = wc_get_products( [
-			'limit'                => 100,
+			'limit'                => 25,
 			'paginate'             => true,
 			'page'                 => $current_page,
 			'type'                 => [ 'simple', 'variation' ],
@@ -991,6 +991,14 @@ class Integration extends \WC_Integration {
 
 				wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 			}
+		} elseif ( 1 < $current_page && empty( $query_products->products ) ) {
+			$this->get_plugin()->log( 'Finished.', $this->get_plugin()->get_id() . '_create-products' );
+
+			if ( empty( $creation_errors ) ) {
+				WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Products created.', 'konekt-merit-aktiva' ) );
+			}
+
+			wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 		} else {
 			$this->get_plugin()->log( 'Did not find any products', $this->get_plugin()->get_id() . '_create-products' );
 			WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Did not find any products.', 'konekt-merit-aktiva' ) );
@@ -1030,9 +1038,9 @@ class Integration extends \WC_Integration {
 
 					<thead>
 						<tr>
-							<th style="width: 35px;">#</th>
-							<th><?php esc_html_e( 'Payment Method', 'konekt-merit-aktiva' ); ?></th>
-							<th><?php esc_html_e( 'Bank', 'konekt-merit-aktiva' ); ?></th>
+							<td style="width: 35px;"><strong>#</strong></td>
+							<td><strong><?php esc_html_e( 'Payment Method', 'konekt-merit-aktiva' ); ?></strong></td>
+							<td><strong><?php esc_html_e( 'Bank', 'konekt-merit-aktiva' ); ?></strong></td>
 						</tr>
 					</thead>
 					<tbody>
@@ -1069,6 +1077,29 @@ class Integration extends \WC_Integration {
 							</tr>
 
 						<?php endforeach; ?>
+
+
+						<?php
+						$row_counter++;
+
+						$value = $values['none'] ?? false;
+						?>
+
+						<tr>
+							<td><?php echo $row_counter; ?>.</td>
+							<td><?php echo esc_html( __( 'No payment' ) ); ?></td>
+							<td>
+								<select name="<?php echo esc_attr( $field_key ); ?>[none]">
+									<option value="">- <?php esc_html_e( 'Do not overwrite', 'konekt-merit-aktiva' ) ?> -</option>
+
+									<?php foreach ( $banks as $bank ) : ?>
+										<option value="<?php echo esc_attr( $bank->Name ); ?>" <?php selected( $value, $bank->Name, true ) ?>><?php echo esc_html( $bank->Name ); ?></option>
+									<?php endforeach; ?>
+
+									<option value="Kassa" <?php selected( $value, 'Kassa' ) ?>>Kassa</option>
+								</select>
+							</td>
+						</tr>
 
 					</tbody>
 
@@ -1289,16 +1320,9 @@ class Integration extends \WC_Integration {
 						'compare' => '!=',
 					],
 					[
-						'relation' => 'OR',
-						[
-							'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-							'compare' => 'NOT EXISTS',
-						],
-						[
-							'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-							'value'   => '',
-							'compare' => '=',
-						]
+						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
+						'value'   => '',
+						'compare' => '=',
 					]
 				];
 			}
