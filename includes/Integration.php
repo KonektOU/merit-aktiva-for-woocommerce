@@ -58,6 +58,10 @@ class Integration extends \WC_Integration {
 
 		// Custom WC query
 		add_filter( 'woocommerce_product_data_store_cpt_get_products_query', array( $this, 'add_custom_product_query_var' ), 10, 2 );
+
+		// Add custom coupon data
+		add_action( 'woocommerce_coupon_options', array( $this, 'add_coupon_giftcard_option' ) );
+		add_action( 'woocommerce_coupon_options_save', array( $this, 'save_coupon_giftcard_option' ), 10, 2 );
 	}
 
 
@@ -143,6 +147,13 @@ class Integration extends \WC_Integration {
 				'title'       => __( 'Shipping SKU', 'konekt-merit-aktiva' ),
 				'type'        => 'text',
 				'default'     => '',
+			],
+
+			'invoice_giftcard_sku' => [
+				'title'       => __( 'Giftcard SKU', 'konekt-merit-aktiva' ),
+				'type'        => 'text',
+				'default'     => '',
+				'description' => __( 'If order contains coupon with e-giftcard, then the coupon row will use this SKU.', 'konekt-merit-aktiva' ),
 			],
 
 			// Stock
@@ -1342,16 +1353,6 @@ class Integration extends \WC_Integration {
 					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
 					'compare' => 'NOT EXISTS',
 				],
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
-					'value'   => '',
-					'compare' => '=',
-				],
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
-					'value'   => $query_vars['merit_aktiva_created'],
-					'compare' => '!=',
-				]
 			];
 		}
 
@@ -1373,6 +1374,40 @@ class Integration extends \WC_Integration {
 			</p>
 		</div>
 		<?php
+	}
+
+
+	/**
+	 * Add giftcard checkbox to coupons
+	 *
+	 * @return void
+	 */
+	public function add_coupon_giftcard_option() {
+		woocommerce_wp_checkbox( array(
+			'id'          => 'is_coupon_giftcard',
+			'cbvalue'     => 'yes',
+			'label'       => __( 'Giftcard', 'konekt-merit-aktiva' ),
+			'description' => __( 'Giftcards change the way discounts are calculated on the invoice.', 'konekt-merit-aktiva' ),
+		) );
+	}
+
+
+	/**
+	 * Save giftcard checkbox data
+	 *
+	 * @param integer $post_id
+	 * @param \WC_Coupon $coupon
+	 *
+	 * @return void
+	 */
+	public function save_coupon_giftcard_option( $post_id, $coupon ) {
+		if ( isset( $_POST['is_coupon_giftcard'] ) ) {
+			$coupon->update_meta_data( 'is_coupon_giftcard', 'yes' );
+		} else {
+			$coupon->update_meta_data( 'is_coupon_giftcard', 'no' );
+		}
+
+		$coupon->save();
 	}
 
 

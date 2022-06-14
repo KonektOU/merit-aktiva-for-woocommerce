@@ -88,6 +88,12 @@ class API extends Framework\SV_WC_API_Base {
 		$order_line_items = [];
 		$total_amount     = 0;
 		$total_tax_amount = 0;
+		$giftcard         = null;
+		$has_coupons      = false;
+
+		if ( ! empty( $coupons = $order->get_coupons() ) ) {
+			$has_coupons = true;
+		}
 
 		// Look for location code from shipping method
 		$location_code = $this->get_plugin()->get_order_warehouse_id( $order );
@@ -105,7 +111,7 @@ class API extends Framework\SV_WC_API_Base {
 			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee' ] );
 		}
 		elseif ( empty( $order_line_items ) ) {
-			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee' ] );
+			$order_line_items = $order->get_items( [ 'line_item', 'shipping', 'fee', 'coupon' ] );
 		}
 
 		// Find matching location
@@ -117,8 +123,20 @@ class API extends Framework\SV_WC_API_Base {
 		}
 
 		// Add order items
-		/** @var \WC_Order_Item_Product $order_item */
+		/** @var \WC_Order_Item_Product|\WC_Order_Item_Coupon|\WC_Order_Item_Shipping $order_item */
 		foreach ( $order_line_items as $order_item ) {
+
+			if ( $order_item->is_type( 'coupon' ) ) {
+				$item_price = $order_item->get_discount( 'edit' );
+				$total_tax  = $order_item->get_discount_tax( 'edit' );
+			} else {
+				$item_price = $order_item->get_total( 'edit' );
+				$total_tax  = $order_item->get_total_tax();
+
+				if ( $has_coupons && ! $order_item->is_type( 'shipping' ) ) {
+					$item_price = $order_item->get_subtotal( 'edit' );
+				}
+			}
 
 			$order_row = [
 				'Item' => [
@@ -127,18 +145,26 @@ class API extends Framework\SV_WC_API_Base {
 					'Type'        => self::ITEM_TYPE_ITEM,
 				],
 				'Quantity' => $this->format_number( $order_item->get_quantity() ),
-				'Price'    => round( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity(), 7 ),
+				'Price'    => round( $item_price / $order_item->get_quantity(), 7 ),
 			];
 
-			$item_taxes = $order_item->get_taxes();
-
-			foreach ( $item_taxes['total'] as $tax_id => $amount ) {
-				$tax_code = $this->integration->get_matching_tax_code( null, $tax_id );
+			if ( $order_item->is_type( 'coupon' ) ) {
+				$tax_code = $this->integration->get_matching_tax_code( $order_item->get_tax_class(), null );
 
 				if ( $tax_code ) {
 					$order_row['TaxId'] = $tax_code;
+				}
+			} else {
+				$item_taxes = $order_item->get_taxes();
 
-					break;
+				foreach ( $item_taxes['total'] as $tax_id => $amount ) {
+					$tax_code = $this->integration->get_matching_tax_code( null, $tax_id );
+
+					if ( $tax_code ) {
+						$order_row['TaxId'] = $tax_code;
+
+						break;
+					}
 				}
 			}
 
@@ -146,7 +172,7 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
 			}
 
-			if ( ( $order_item->get_total( 'edit' ) > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $order_item->get_total_tax() == 0 ) {
+			if ( ( $item_price > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $total_tax == 0 ) {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
 
 				if ( ! empty( $account_code = $this->integration->get_option( 'zero_tax_account_code', null ) ) ) {
@@ -154,7 +180,7 @@ class API extends Framework\SV_WC_API_Base {
 				}
 			}
 
-			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax() >= 0 ) {
+			if ( empty( $order_row['TaxId'] ) && $total_tax >= 0 ) {
 				$order_row['TaxId'] = $this->integration::DEFAULT_ESTONIAN_TAX_ID;
 			}
 
@@ -228,12 +254,25 @@ class API extends Framework\SV_WC_API_Base {
 				}
 
 			} else {
-
 				if ( $order_item->is_type( 'shipping' ) ) {
+					$order_row['Item']['Type'] = self::ITEM_TYPE_SERVICE;
 					$order_row['Item']['Code'] = $this->integration->get_option( 'invoice_shipping_sku' );
-				}
 
-				$order_row['Item']['Type'] = self::ITEM_TYPE_SERVICE;
+				} elseif ( $order_item->is_type( 'coupon' ) ) {
+					$_coupon = new \WC_Coupon( $order_item->get_code() );
+
+					if ( 'yes' === $_coupon->get_meta( 'is_coupon_giftcard', true ) ) {
+						$giftcard_sku = $this->integration->get_option( 'inmvoice_giftcard_sku' );
+
+						if ( $giftcard_sku ) {
+							$order_row['Item']['Code'] = $giftcard_sku;
+						}
+
+						$order_row['Item']['Description'] = sprintf( __( 'Giftcard: %s', 'konekt-merit-aktiva' ), $order_item->get_code() );
+					} else {
+						$order_row['Item']['Description'] = sprintf( __( 'Coupon: %s', 'konekt-merit-aktiva' ), $order_item->get_code() );
+					}
+				}
 			}
 
 			if ( $refund ) {
@@ -252,12 +291,12 @@ class API extends Framework\SV_WC_API_Base {
 				$total_amount += $this->format_number( $order_row['Price'] * $order_row['Quantity'] );
 			}
 
-			$total_tax_amount += $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) );
+			$total_tax_amount += $this->format_number( abs( $total_tax ) );
 
 			$order_items[] = $order_row;
 			$tax_items[]   = [
 				'TaxId'  => $order_row['TaxId'],
-				'Amount' => $this->format_number( abs( $order_item->get_total_tax( 'edit' ) ) ),
+				'Amount' => $this->format_number( abs( $total_tax ) ),
 			];
 		}
 
@@ -335,14 +374,17 @@ class API extends Framework\SV_WC_API_Base {
 			if ( $order->get_date_paid() ) {
 				$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
 				$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
-				$invoice['Payment']         = [
-					'PaymentMethod' => $order->get_payment_method_title(),
-					'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount + ( $invoice['RoundingAmount'] ?? 0 ) ),
-					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
-				];
 
-				if ( ! empty( $payment_method = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
-					$invoice['Payment']['PaymentMethod'] = $payment_method;
+				if ( $order->needs_payment() ) {
+					$invoice['Payment']         = [
+						'PaymentMethod' => $order->get_payment_method_title(),
+						'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount + ( $invoice['RoundingAmount'] ?? 0 ) ),
+						'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
+					];
+
+					if ( ! empty( $payment_method = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
+						$invoice['Payment']['PaymentMethod'] = $payment_method;
+					}
 				}
 			}
 		}
