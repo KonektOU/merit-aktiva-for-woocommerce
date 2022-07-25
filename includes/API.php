@@ -374,17 +374,14 @@ class API extends Framework\SV_WC_API_Base {
 			if ( $order->get_date_paid() ) {
 				$invoice['DueDate']         = $order->get_date_paid()->format( 'YmdHis' );
 				$invoice['TransactionDate'] = $order->get_date_paid()->format( 'YmdHis' );
+				$invoice['Payment']         = [
+					'PaymentMethod' => $order->get_payment_method_title(),
+					'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount + ( $invoice['RoundingAmount'] ?? 0 ) ),
+					'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
+				];
 
-				if ( $order->needs_payment() ) {
-					$invoice['Payment']         = [
-						'PaymentMethod' => $order->get_payment_method_title(),
-						'PaidAmount'    => $this->format_number( $total_amount + $total_tax_amount + ( $invoice['RoundingAmount'] ?? 0 ) ),
-						'PaymDate'      => $order->get_date_paid()->format( 'YmdHis' ),
-					];
-
-					if ( ! empty( $payment_method = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
-						$invoice['Payment']['PaymentMethod'] = $payment_method;
-					}
+				if ( ! empty( $payment_method = $this->integration->get_matching_bank_account( $order->get_payment_method() ) ) ) {
+					$invoice['Payment']['PaymentMethod'] = $payment_method;
 				}
 			}
 		}
