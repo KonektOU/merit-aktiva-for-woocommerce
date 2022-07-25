@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.0.33';
+	const VERSION = '1.0.34';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -296,6 +296,10 @@ class Plugin extends Framework\SV_WC_Plugin {
 				$order->update_meta_data( $this->get_meta_key( $key ), $value );
 			}
 
+		} elseif ( is_array( $value ) ) {
+			foreach ( $value as $meta_value ) {
+				$order->add_meta_data( $this->get_meta_key( $meta ), $meta_value, false );
+			}
 		} else {
 			$order->update_meta_data( $this->get_meta_key( $meta ), $value );
 		}
@@ -469,6 +473,19 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected function get_file() {
 
 		return __DIR__;
+	}
+
+
+	/**
+	 * Initializes the lifecycle handler.
+	 *
+	 * @since 1.0.0
+	 */
+	protected function init_lifecycle_handler() {
+
+		require_once( $this->get_plugin_path() . '/includes/Lifecycle.php' );
+
+		$this->lifecycle_handler = new \Konekt\WooCommerce\Merit_Aktiva\Lifecycle( $this );
 	}
 
 
