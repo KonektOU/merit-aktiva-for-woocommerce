@@ -1332,9 +1332,8 @@ class Integration extends \WC_Integration {
 					],
 					[
 						'key'     => $this->get_plugin()->get_meta_key( 'item_id' ),
-						'value'   => '',
-						'compare' => '=',
-					]
+						'compare' => 'NOT EXISTS',
+					],
 				];
 			}
 			else {
@@ -1353,6 +1352,16 @@ class Integration extends \WC_Integration {
 					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
 					'compare' => 'NOT EXISTS',
 				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
+					'value'   => $query_vars['merit_aktiva_created'],
+					'compare' => '!=',
+				]
 			];
 		}
 

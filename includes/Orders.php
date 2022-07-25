@@ -50,9 +50,13 @@ class Orders {
 			// Allow filtering orders with/without order ID
 			add_action( 'restrict_manage_posts', array( $this, 'filter_orders_by_external_order_id') , 20 );
 			add_filter( 'request', array( $this, 'filter_orders_by_external_order_id_query' ) );
+			add_filter( 'request', array( $this, 'filter_orders_by_warehouse_id_query' ) );
 
 			// Validate products in cart
 			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products' ), 10, 2 );
+
+			// Add custom order var
+			add_filter( 'woocommerce_order_data_store_cpt_get_orders_query', array( $this, 'add_custom_order_query_var' ), 10, 2 );
 		}
 	}
 
@@ -373,8 +377,31 @@ class Orders {
 				<option value="1" <?php echo esc_attr( isset( $_GET[$action_name] ) ? selected( '1', $_GET[$action_name], false ) : '' ); ?>><?php esc_html_e( 'Merit Aktiva: Submitted', 'konekt-merit-aktiva' ) ?></option>
 				<option value="0" <?php echo esc_attr( isset( $_GET[$action_name] ) ? selected( '0', $_GET[$action_name], false ) : '' ); ?>><?php esc_html_e( 'Merit Aktiva: Not submitted', 'konekt-merit-aktiva' ) ?></option>
 			</select>
+
+			<?php
+			$warehouses  = $this->get_orders_warehouses();
+			$action_name = $this->integration->id . '_warehouse_filter';
+			?>
+
+			<select name="<?php echo esc_attr( $action_name ); ?>" id="dropdown_<?php echo esc_attr( $action_name ); ?>">
+				<option value=""><?php esc_html_e( 'Show all warehouses', 'konekt-merit-aktiva' ); ?></option>
+
+				<?php foreach ( $warehouses as $warehouse_id ) : ?>
+					<option value="<?php echo esc_attr( $warehouse_id ); ?>" <?php echo esc_attr( isset( $_GET[$action_name] ) ? selected( $warehouse_id, $_GET[$action_name], false ) : '' ); ?>><?php echo esc_html( $this->get_plugin()->attach_warehouse_title( '', $warehouse_id ) ) ?></option>
+				<?php endforeach; ?>
+			</select>
 			<?php
 		}
+	}
+
+
+	public function get_orders_warehouses() {
+		global $wpdb;
+
+		$warehouses_ids = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s", $this->get_plugin()->get_meta_key( 'warehouse_id' ) ) );
+		$warehouses_ids = array_unique( $warehouses_ids );
+
+		return $warehouses_ids;
 	}
 
 
@@ -397,6 +424,81 @@ class Orders {
 		}
 
 		return $vars;
+	}
+
+
+	public function filter_orders_by_warehouse_id_query( $vars ) {
+
+		global $typenow;
+
+		$action_name = $this->integration->id . '_warehouse_filter';
+
+		if ( 'shop_order' == $typenow && isset( $_GET[$action_name] ) && is_numeric( $_GET[$action_name] ) ) {
+
+			$vars['meta_key'] = $this->get_plugin()->get_meta_key( 'warehouse_id' );
+
+			if ( ! empty( $_GET[ $action_name ] ) ) {
+				$vars['meta_compare'] = '=';
+				$vars['meta_value']   = $_GET[ $action_name ];
+			}
+		}
+
+		return $vars;
+	}
+
+
+	public function add_custom_order_query_var( $query, $query_vars ) {
+		if ( isset( $query_vars['merit_aktiva_invoice_id'] ) ) {
+			if ( '' === $query_vars['merit_aktiva_invoice_id'] ) {
+				$query['meta_query'][] = [
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'invoice_id' ),
+						'compare' => 'NOT EXISTS',
+					],
+				];
+			} elseif ( 'any' === $query_vars['merit_aktiva_invoice_id'] ) {
+				$query['meta_query'][] = [
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'invoice_id' ),
+						'value'   => '',
+						'compare' => '!=',
+					],
+				];
+			} else {
+				$query['meta_query'][] = [
+					'key'     => $this->get_plugin()->get_meta_key( 'invoice_id' ),
+					'value'   => $query_vars['merit_aktiva_invoice_id'],
+					'compare' => '=',
+				];
+			}
+		}
+
+		if ( isset( $query_vars['merit_aktiva_warehouse_id'] ) ) {
+			if ( '' === $query_vars['merit_aktiva_warehouse_id'] ) {
+				$query['meta_query'][] = [
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'warehouse_id' ),
+						'compare' => 'NOT EXISTS',
+					],
+				];
+			} elseif ( 'any' === $query_vars['merit_aktiva_warehouse_id'] ) {
+				$query['meta_query'][] = [
+					[
+						'key'     => $this->get_plugin()->get_meta_key( 'warehouse_id' ),
+						'value'   => '',
+						'compare' => '!=',
+					],
+				];
+			} else {
+				$query['meta_query'][] = [
+					'key'     => $this->get_plugin()->get_meta_key( 'warehouse_id' ),
+					'value'   => $query_vars['merit_aktiva_warehouse_id'],
+					'compare' => '=',
+				];
+			}
+		}
+
+		return $query;
 	}
 
 
