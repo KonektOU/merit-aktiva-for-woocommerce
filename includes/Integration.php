@@ -1029,10 +1029,10 @@ class Integration extends \WC_Integration {
 			'description'       => '',
 			'custom_attributes' => [],
 		];
-		$data        = wp_parse_args( $data, $default_args );
-		$row_counter = 0;
-		$values      = (array) $this->get_option( $key, array() );
-		$banks       = $this->get_api()->get_banks();
+		$data          = wp_parse_args( $data, $default_args );
+		$row_counter   = 0;
+		$values        = (array) $this->get_option( $key, array() );
+		$payment_types = $this->get_api()->get_payment_types();
 
 		ob_start();
 		?>
@@ -1056,19 +1056,12 @@ class Integration extends \WC_Integration {
 					</thead>
 					<tbody>
 
-						<?php foreach ( WC()->payment_gateways()->get_available_payment_gateways() as $gateway_id => $gateway ) : ?>
+						<?php foreach ( WC()->payment_gateways()->payment_gateways() as $gateway_id => $gateway ) : ?>
 
 							<?php
 							$row_counter++;
 
 							$value = $values[ $gateway_id ] ?? false;
-
-							if ( empty( $value ) && 'cod' === $gateway_id ) {
-								$value = $this->get_option( 'cod_payment_method_name', false );
-							}
-							elseif ( empty( $value ) ) {
-								$value = $this->get_option( 'invoice_payment_method_name', false );
-							}
 							?>
 
 							<tr>
@@ -1078,11 +1071,9 @@ class Integration extends \WC_Integration {
 									<select name="<?php echo esc_attr( $field_key ); ?>[<?php echo esc_attr( $gateway_id ); ?>]">
 										<option value="">- <?php esc_html_e( 'Do not overwrite', 'konekt-merit-aktiva' ) ?> -</option>
 
-										<?php foreach ( $banks as $bank ) : ?>
+										<?php foreach ( $payment_types as $bank ) : ?>
 											<option value="<?php echo esc_attr( $bank->Name ); ?>" <?php selected( $value, $bank->Name, true ) ?>><?php echo esc_html( $bank->Name ); ?></option>
 										<?php endforeach; ?>
-
-										<option value="Kassa" <?php selected( $value, 'Kassa' ) ?>>Kassa</option>
 									</select>
 								</td>
 							</tr>
@@ -1103,11 +1094,9 @@ class Integration extends \WC_Integration {
 								<select name="<?php echo esc_attr( $field_key ); ?>[none]">
 									<option value="">- <?php esc_html_e( 'Do not overwrite', 'konekt-merit-aktiva' ) ?> -</option>
 
-									<?php foreach ( $banks as $bank ) : ?>
+									<?php foreach ( $payment_types as $bank ) : ?>
 										<option value="<?php echo esc_attr( $bank->Name ); ?>" <?php selected( $value, $bank->Name, true ) ?>><?php echo esc_html( $bank->Name ); ?></option>
 									<?php endforeach; ?>
-
-									<option value="Kassa" <?php selected( $value, 'Kassa' ) ?>>Kassa</option>
 								</select>
 							</td>
 						</tr>
@@ -1274,12 +1263,7 @@ class Integration extends \WC_Integration {
 			return $payment_methods[ $payment_method ];
 		}
 		else {
-			if ( 'cod' === $payment_method ) {
-				return $this->get_option( 'cod_payment_method_name', null );
-			}
-			else {
-				return $this->get_option( 'invoice_payment_method_name', null );
-			}
+			return null;
 		}
 	}
 

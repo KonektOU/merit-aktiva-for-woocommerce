@@ -677,13 +677,13 @@ class API extends Framework\SV_WC_API_Base {
 		];
 
 		if ( ! empty( $bank_name ) ) {
-			$banks = $this->get_banks();
+			$payment_types = $this->get_payment_types();
 
-			if ( is_array( $banks ) ) {
-				$banks_ibans = wc_list_pluck( $banks, 'IBANCode', 'Name' );
+			if ( is_array( $payment_types ) ) {
+				$payment_types_ids = wc_list_pluck( $payment_types, 'Id', 'Name' );
 
-				if ( array_key_exists( $bank_name, $banks_ibans ) ) {
-					$data['IBAN'] = $banks_ibans[ $bank_name ];
+				if ( array_key_exists( $bank_name, $payment_types_ids ) ) {
+					$data['BankId'] = $payment_types_ids[ $bank_name ];
 				}
 			}
 		}
@@ -715,6 +715,34 @@ class API extends Framework\SV_WC_API_Base {
 				'data'   => [],
 			] )
 		);
+
+		return empty( $request ) ? null : $request->response_data;
+	}
+
+
+	/**
+	 * Get payment types
+	 *
+	 * @since 1.0.35
+	 *
+	 * @return object
+	 */
+	public function get_payment_types() {
+		// Set v2 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) . '_v2' ];
+
+		$request = $this->perform_request(
+			$this->get_new_request( [
+				'method' => 'POST',
+				'path'   => 'getpaymenttypes',
+				'data'   => [
+					'Type' => 3 // Sales
+				],
+			] )
+		);
+
+		// Set v1 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) ];
 
 		return empty( $request ) ? null : $request->response_data;
 	}
