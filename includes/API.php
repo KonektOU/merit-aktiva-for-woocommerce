@@ -504,7 +504,7 @@ class API extends Framework\SV_WC_API_Base {
 				continue;
 			}
 
-			$this->get_plugin()->log( sprintf( 'Creating %s (%s)', $product->get_name(), $product->get_sku() ), $this->get_plugin()->get_id() . '_create-products' );
+			$this->get_plugin()->log_action( sprintf( 'Creating %s (%s)', $product->get_name(), $product->get_sku() ), 'create-products' );
 
 			if ( $product->is_type( 'variable' ) ) {
 				foreach ( $product->get_children() as $variation_id ) {

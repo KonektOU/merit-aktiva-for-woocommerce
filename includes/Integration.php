@@ -528,6 +528,8 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->hook_action( 'cron_job', array( $this, 'cron_hook' ) );
 		$this->get_plugin()->hook_action( 'manual_product_update', array( $this, 'cron_hook' ) );
 		$this->get_plugin()->hook_action( 'product_update', array( $this, 'cron_products_hook' ) );
+		$this->get_plugin()->hook_action( 'create_chunk_of_products', array( $this, 'as_action_create_chunk_of_products' ), 10, 3 );
+		$this->get_plugin()->hook_action( 'end_of_product_creation_message', array( $this, 'as_action_end_of_product_creation_message' ) );
 	}
 
 
@@ -556,7 +558,7 @@ class Integration extends \WC_Integration {
 
 
 	public function cron_products_hook( $page = 1, $manual_update = false ) {
-		$this->get_plugin()->log( sprintf( 'Fetching products for an update, page %d.', $page ), $this->get_plugin()->get_id() . '_update-products' );
+		$this->get_plugin()->log_action( sprintf( 'Fetching products for an update, page %d.', $page ), 'update-products' );
 
 		// Remove existing product updates
 		$this->get_plugin()->unschedule_all_actions( 'product_update' );
@@ -596,13 +598,13 @@ class Integration extends \WC_Integration {
 			$this->get_plugin()->add_notice( 'manual_stock_sync', sprintf( 'Updated %d products, page %d of %d. Total products %d.', count( $results->products ), $page, $results->max_num_pages, $results->total ) );
 		}
 
-		$this->get_plugin()->log( sprintf( __( 'Updated %d products, page %d of %d. Total products %d.', 'konekt-merit-aktiva' ), count( $results->products ), $page, $results->max_num_pages, $results->total ), $this->get_plugin()->get_id() . '_update-products' );
+		$this->get_plugin()->log_action( sprintf( __( 'Updated %d products, page %d of %d. Total products %d.', 'konekt-merit-aktiva' ), count( $results->products ), $page, $results->max_num_pages, $results->total ), 'update-products' );
 
 		if ( $results->max_num_pages > $page ) {
 			$this->get_plugin()->schedule_action( 'product_update', [ $page + 1 ] );
 		}
 		elseif ( $results->max_num_pages == $page ) {
-			$this->get_plugin()->log( sprintf( 'End of product updates. Updated total of %d.', $results->total ), $this->get_plugin()->get_id() . '_update-products' );
+			$this->get_plugin()->log_action( sprintf( 'End of product updates. Updated total of %d.', $results->total ), 'update-products' );
 
 			if ( true === $manual_update ) {
 				$this->get_plugin()->add_notice( 'manual_stock_sync', __( 'Finished product stock syncing.', 'konekt-merit-aktiva' ) );
@@ -916,36 +918,68 @@ class Integration extends \WC_Integration {
 
 		do_action( $this->get_plugin()->get_id() . '_create-products' );
 
-		$current_page  = absint( wc_get_var( $_GET['current_page'], 1 ) );
-		$last_creation = date_i18n( 'Y-m-d H:i:s' );
+		$this->get_plugin()->log_action( 'Starting manual product creation', 'create-products' );
 
-		$this->get_plugin()->log( sprintf( 'Starting manual product creation (page %d)', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
-
-		$query_products = wc_get_products( [
-			'limit'                => 25,
-			'paginate'             => true,
-			'page'                 => $current_page,
+		$products_per_page = 10;
+		$products_ids      = wc_get_products( [
+			'limit'                => -1,
+			'paginate'             => false,
 			'type'                 => [ 'simple', 'variation' ],
 			'return'               => 'ids',
 			'status'               => 'publish',
 			'merit_aktiva_item_id' => '',
-			'merit_aktiva_created' => $last_creation,
 		] );
 
-		if ( 1 === $current_page ) {
-			$this->get_plugin()->log( sprintf( 'Found total of %d products, total of %d pages', $query_products->total, $query_products->max_num_pages ), $this->get_plugin()->get_id() . '_create-products' );
-			$this->get_plugin()->delete_cache( 'create_products' );
-		}
+		$this->get_plugin()->delete_cache( 'create_products' );
 
 		if ( WC_Admin_Notices::has_notice( $this->get_plugin()->get_id() . '_create-products' ) ) {
 			WC_Admin_Notices::remove_notice( $this->get_plugin()->get_id() . '_create-products' );
 		}
 
-		if ( ! empty( $query_products->products ) ) {
-			$products = array_map( 'wc_get_product', $query_products->products );
+		if ( ! empty( $products_ids ) ) {
+			if ( count( $products_ids ) > $products_per_page ) {
+				$products_chunk = array_chunk( $products_ids, $products_per_page );
+			} else {
+				$products_chunk = [ $products_ids ];
+			}
+
+			$notice_text = sprintf( __( 'Found total of %d products, total of %d chunks', 'konekt-merit-aktiva' ), count( $products_ids ), count( $products_chunk ) );
+
+			$this->get_plugin()->add_notice( 'create-products', $notice_text );
+
+			$this->get_plugin()->log_action( $notice_text, 'create-products' );
+
+			foreach ( $products_chunk as $chunk_key => $chunk ) {
+				$this->get_plugin()->schedule_action( 'create_chunk_of_products', [ 'ids' => $chunk, 'chunk' => $chunk_key + 1, 'total_chunks' => count( $products_chunk ) ] );
+			}
+
+			$this->get_plugin()->schedule_action( 'end_of_product_creation_message', [ 'total_products' => count( $products_ids ) ] );
+		} else {
+			$this->get_plugin()->log_action( __( 'Did not find any products.', 'konekt-merit-aktiva' ), 'create-products' );
+			$this->get_plugin()->add_notice( 'create-products', __( 'Did not find any products.', 'konekt-merit-aktiva' ) );
+		}
+
+		wp_safe_redirect( add_query_arg( 'start', '1', $this->get_plugin()->get_settings_url() ) );
+	}
+
+
+	public function as_action_create_chunk_of_products( $ids = [], $chunk = 0, $total_chunks = 0 ) {
+		if ( ! empty( $ids ) ) {
+			$products = array_map( 'wc_get_product', $ids );
 
 			// Create products
 			$create_products = $this->get_api()->create_products( $products );
+			$last_creation   = date_i18n( 'Y-m-d H:i:s' );
+
+			$this->get_plugin()->add_notice(
+				'create-products',
+				sprintf(
+					__( 'Creating %d products, chunk %d of total %d.', 'konekt-merit-aktiva' ),
+					count( $ids ),
+					$chunk,
+					$total_chunks
+				)
+			);
 
 			if ( true === $create_products ) {
 				do_action( 'konekt_merit_aktiva_created_products' );
@@ -970,52 +1004,35 @@ class Integration extends \WC_Integration {
 					}
 
 				}
+
+				$this->get_plugin()->log_action( __( 'End of this chunk.', 'konekt-merit-aktiva' ), 'create-products' );
 			} else {
-				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $create_products->Message, true ) ), $this->get_plugin()->get_id() . '_create-products' );
+				$this->get_plugin()->log_action( sprintf( 'Could not create products: %s', print_r( $create_products->Message, true ) ), 'create-products' );
 
 				$creation_errors  = $this->get_plugin()->get_cache( 'create_products' );
 				$creation_errors .= print_r( $create_products->Message ?? $create_products, true );
 
 				$this->get_plugin()->set_cache( 'create_products', $creation_errors, 0 );
 			}
-
-			if ( ( $query_products->max_num_pages > 1 && $current_page < $query_products->max_num_pages ) && $query_products->max_num_pages != $current_page ) {
-				wp_safe_redirect( add_query_arg( [
-					'action'       => 'create-products',
-					'nonce'        => wp_create_nonce( 'create-products' ),
-					'current_page' => $current_page + 1,
-				], $this->get_plugin()->get_settings_url() ) );
-			} else {
-				$this->get_plugin()->log( sprintf( 'Finished manual product sync after %d pages', $current_page ), $this->get_plugin()->get_id() . '_create-products' );
-
-				if ( ! $creation_errors ) {
-					$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
-				}
-
-				$this->get_plugin()->log( sprintf( 'Could not create products: %s', print_r( $creation_errors, true ) ), $this->get_plugin()->get_id() . '_create-products' );
-
-				if ( ! empty( $creation_errors ) ) {
-					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', $creation_errors );
-				} else {
-					WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Products created.', 'konekt-merit-aktiva' ) );
-				}
-
-				wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
-			}
-		} elseif ( 1 < $current_page && empty( $query_products->products ) ) {
-			$this->get_plugin()->log( 'Finished.', $this->get_plugin()->get_id() . '_create-products' );
-
-			if ( empty( $creation_errors ) ) {
-				WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Products created.', 'konekt-merit-aktiva' ) );
-			}
-
-			wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
-		} else {
-			$this->get_plugin()->log( 'Did not find any products', $this->get_plugin()->get_id() . '_create-products' );
-			WC_Admin_Notices::add_custom_notice( $this->get_plugin()->get_id() . '_create-products', __( 'Did not find any products.', 'konekt-merit-aktiva' ) );
 		}
 	}
 
+
+	public function as_action_end_of_product_creation_message( $total_products = 0 ) {
+
+		$this->get_plugin()->log_action( 'Finished manual product sync', 'create-products' );
+
+		$creation_errors = $this->get_plugin()->get_cache( 'create_products' );
+
+		if ( ! empty( $creation_errors ) ) {
+			$this->get_plugin()->log_action( sprintf( 'Could not create products: %s', print_r( $creation_errors, true ) ), 'create-products' );
+			$this->get_plugin()->add_notice( 'create-products', $creation_errors );
+		} else {
+			$this->get_plugin()->add_notice( 'create-products', sprintf( __( 'Created total of %d products.', 'konekt-merit-aktiva' ), $total_products ) );
+		}
+
+		wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
+	}
 
 	public function generate_payment_methods_mapping_table_html( $key, $data ) {
 		$field_key      = $this->get_field_key( $key );

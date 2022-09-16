@@ -414,13 +414,22 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
-	public function hook_action( $action, $hook ) {
-		add_action( $this->get_id() . '_' . $action, $hook, 10 );
+	public function hook_action( $action, $hook, $priority = 10, $accepted_args = 1 ) {
+		add_action( $this->get_id() . '_' . $action, $hook, $priority, $accepted_args );
 	}
 
 
 	public function unschedule_all_actions( $action, $data = null ) {
 		as_unschedule_all_actions( $this->get_id() . '_' . $action, $data, $this->get_id() );
+	}
+
+
+	public function log_action( $message, $action = null ) {
+		if ( $action ) {
+			$this->log( $message, $this->get_id() . '_' . $action );
+		} else {
+			$this->log( $message );
+		}
 	}
 
 
