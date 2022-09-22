@@ -369,7 +369,7 @@ class Integration extends \WC_Integration {
 						'ProductId'         => $product_id,
 					];
 
-					$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
+					$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, MINUTE_IN_SECONDS * intval( $this->get_option( 'stock_refresh_rate', 15 ) ) );
 
 					$this->update_product_stock_data( $product );
 				}
@@ -710,7 +710,7 @@ class Integration extends \WC_Integration {
 
 				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s). Total of products %d.', $warehouse['title'], $warehouse['id'], count( $cleaned_data ) ) );
 
-				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, HOUR_IN_SECONDS * intval( $this->get_option( 'product_refresh_rate', 15 ) ) );
+				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, MINUTE_IN_SECONDS * intval( $this->get_option( 'stock_refresh_rate', 15 ) ) );
 			}
 		}
 
