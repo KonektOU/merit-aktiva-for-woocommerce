@@ -127,8 +127,8 @@ class API extends Framework\SV_WC_API_Base {
 		foreach ( $order_line_items as $order_item ) {
 
 			if ( $order_item->is_type( 'coupon' ) ) {
-				$item_price = $order_item->get_discount( 'edit' );
-				$total_tax  = $order_item->get_discount_tax( 'edit' );
+				$item_price = 0 - $order_item->get_discount( 'edit' );
+				$total_tax  = 0 - $order_item->get_discount_tax( 'edit' );
 			} else {
 				$item_price = $order_item->get_total( 'edit' );
 				$total_tax  = $order_item->get_total_tax();
@@ -236,7 +236,7 @@ class API extends Framework\SV_WC_API_Base {
 				}
 
 				// Check for discounts
-				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) ) {
+				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) && ! $has_coupons ) {
 					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
 
 					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
@@ -262,7 +262,7 @@ class API extends Framework\SV_WC_API_Base {
 					$_coupon = new \WC_Coupon( $order_item->get_code() );
 
 					if ( 'yes' === $_coupon->get_meta( 'is_coupon_giftcard', true ) ) {
-						$giftcard_sku = $this->integration->get_option( 'inmvoice_giftcard_sku' );
+						$giftcard_sku = $this->integration->get_option( 'invoice_giftcard_sku' );
 
 						if ( $giftcard_sku ) {
 							$order_row['Item']['Code'] = $giftcard_sku;
@@ -285,18 +285,19 @@ class API extends Framework\SV_WC_API_Base {
 			}
 
 			if ( ! empty( $order_row['DiscountedPrice'] ) ) {
-				$total_amount += $this->format_number( $order_row['DiscountedPrice'] * $order_row['Quantity'] );
+				$total_amount += $this->format_number( $order_row['DiscountedPrice'] );
 			}
 			else {
 				$total_amount += $this->format_number( $order_row['Price'] * $order_row['Quantity'] );
 			}
 
-			$total_tax_amount += $this->format_number( abs( $total_tax ) );
+			$formatted_tax     = $this->format_number( $order_item->is_type( 'coupon' ) ? $total_tax : abs( $total_tax ) );
+			$total_tax_amount += $formatted_tax;
 
 			$order_items[] = $order_row;
 			$tax_items[]   = [
 				'TaxId'  => $order_row['TaxId'],
-				'Amount' => $this->format_number( abs( $total_tax ) ),
+				'Amount' => $formatted_tax,
 			];
 		}
 
