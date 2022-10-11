@@ -16,6 +16,7 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 
 	protected $upgrade_versions = [
 		'1.0.34',
+		'1.0.36',
 	];
 
 	public function upgrade_to_1_0_34( $installed_version ) {
@@ -42,5 +43,33 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 				$this->get_plugin()->add_order_meta( $order, 'warehouse_id', $warehouses );
 			}
 		}
+	}
+
+	public function upgrade_to_1_0_36( $installed_version ) {
+		global $wpdb;
+
+		$collate = '';
+
+		if ( $wpdb->has_cap( 'collation' ) ) {
+			$collate = $wpdb->get_charset_collate();
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+		$create_table = "
+			CREATE TABLE {$wpdb->prefix}wc_merit_aktiva_product_lookup (
+				`sku` varchar(100),
+				`item_id` varchar(100) NULL default NULL,
+				`stock_quantity` double NULL default NULL,
+				`product_type` varchar(100) NULL default NULL,
+				`location_code` bigint(20) NULL default 0,
+				`uom_name` varchar(100) NULL default NULL,
+				PRIMARY KEY  (`sku`, `location_code`),
+				KEY `location_code` (`location_code`),
+				KEY `item_id` (`item_id`)
+			) $collate;
+		";
+
+		dbDelta( $create_table );
 	}
 }

@@ -325,9 +325,9 @@ class Integration extends \WC_Integration {
 			$update     = $this->manually_update_product_stock_data( $product_id );
 
 			if ( true === $update ) {
-				$this->get_plugin()->get_admin_notice_handler()->add_admin_notice( __( 'Product updated.', 'konekt-merit-aktiva' ), 'product_update' );
+				$this->get_plugin()->add_notice( 'product_update', __( 'Product updated.', 'konekt-merit-aktiva' ) );
 			} else {
-				$this->get_plugin()->get_admin_notice_handler()->add_admin_notice( __( 'Product update failed.', 'konekt-merit-aktiva' ), 'product_update' );
+				$this->get_plugin()->add_notice( 'product_update', __( 'Product update failed.', 'konekt-merit-aktiva' ) );
 			}
 		}
 
@@ -337,6 +337,8 @@ class Integration extends \WC_Integration {
 
 
 	public function manually_update_product_stock_data( $product_id ) {
+		global $wpdb;
+
 		$_product = wc_get_product( $product_id );
 		$products = [ $_product ];
 
@@ -354,22 +356,39 @@ class Integration extends \WC_Integration {
 			foreach ( $products as $product ) {
 
 				foreach ( $this->get_warehouses() as $warehouse ) {
-					$warehouse_products = $this->get_warehouse_products( $warehouse['id'] );
-					$item_stock         = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
+					$item_stock           = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
+					$product_in_warehouse = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
 
 					if ( ! is_object( $item_stock ) || ! property_exists( $item_stock, 'InventoryQty' ) ) {
 						continue;
 					}
 
-					$warehouse_products[ $product->get_sku() ] = (object) [
-						'Type'              => $item_stock->Type,
-						'InventoryQty'      => $item_stock->InventoryQty,
-						'ItemId'            => $item_stock->ItemId,
-						'UnitofMeasureName' => $item_stock->UnitofMeasureName,
-						'ProductId'         => $product_id,
+					$product_data = [
+						'product_type'   => $item_stock->Type,
+						'stock_quantity' => $item_stock->InventoryQty,
+						'item_id'        => $item_stock->ItemId,
+						'uom_name'       => $item_stock->UnitofMeasureName,
+						'sku'            => $product->get_sku(),
+						'location_code'  => $warehouse['id'],
 					];
 
-					$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $warehouse_products, MINUTE_IN_SECONDS * intval( $this->get_option( 'stock_refresh_rate', 15 ) ) );
+					if ( $product_in_warehouse ) {
+
+						$wpdb->update(
+							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+							$product_data,
+							[
+								'location_code' => $warehouse['id'],
+								'sku'           => $product->get_sku(),
+							]
+						);
+
+					} else {
+						$wpdb->insert(
+							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+							$product_data,
+						);
+					}
 
 					$this->update_product_stock_data( $product );
 				}
@@ -387,18 +406,16 @@ class Integration extends \WC_Integration {
 
 
 	public function get_product_from_warehouse( $product_sku, $warehouse_id ) {
+		global $wpdb;
+
 		if ( empty( $product_sku ) ) {
 			return null;
 		}
 
-		$all_products = $this->get_warehouse_products( $warehouse_id );
-		$product      = null;
-
-		if ( $all_products ) {
-			if ( array_key_exists( $product_sku, $all_products ) ) {
-				$product = $all_products[ $product_sku ];
-			}
-		}
+		$product = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d AND sku = %s", $warehouse_id, $product_sku ),
+			ARRAY_A
+		);
 
 		return $product;
 	}
@@ -425,9 +442,7 @@ class Integration extends \WC_Integration {
 				continue;
 			}
 
-			$item_stock = (array) $item_stock;
-
-			if ( 'Laokaup' != $item_stock['Type'] ) {
+			if ( 'Laokaup' != $item_stock['product_type'] ) {
 				$quantities = null;
 
 				$product->set_manage_stock( false );
@@ -446,16 +461,16 @@ class Integration extends \WC_Integration {
 
 			// Save item ID
 			$this->get_plugin()->add_product_meta( $product, [
-				'item_id'  => $item_stock['ItemId'],
-				'uom_name' => $item_stock['UnitofMeasureName'],
+				'item_id'  => $item_stock['item_id'],
+				'uom_name' => $item_stock['uom_name'],
 			] );
 
-			if ( $item_stock['InventoryQty'] ) {
-				$total_quantity += (int) $item_stock['InventoryQty'];
+			if ( $item_stock['stock_quantity'] ) {
+				$total_quantity += (int) $item_stock['stock_quantity'];
 
 				$quantities[] = [
 					'location' => $warehouse['id'],
-					'quantity' => wc_stock_amount( $item_stock['InventoryQty'] ),
+					'quantity' => wc_stock_amount( $item_stock['stock_quantity'] ),
 				];
 			}
 		}
@@ -516,7 +531,7 @@ class Integration extends \WC_Integration {
 
 		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
 			foreach ( $this->get_warehouses() as $key => $warehouse ) {
-				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) );
+				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) + ( ( HOUR_IN_SECONDS * $key ) + 1 ) );
 
 				if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
 					wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
@@ -566,7 +581,7 @@ class Integration extends \WC_Integration {
 		$results = wc_get_products( [
 			'type'     => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),
 			'return'   => 'ids',
-			'limit'    => 200,
+			'limit'    => 25,
 			'order'    => 'DESC',
 			'orderby'  => 'post_type',
 			'status'   => 'publish',
@@ -654,11 +669,18 @@ class Integration extends \WC_Integration {
 
 
 	public function get_warehouse_products( $warehouse_id ) {
-		return $this->get_plugin()->get_cache( 'warehouse_' . $warehouse_id );
+		global $wpdb;
+
+		return $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d", $warehouse_id ),
+			ARRAY_A
+		);
 	}
 
 
 	public function update_warehouse_products( $clear_cache = false, $warehouses = [] ) {
+		global $wpdb;
+
 		if ( empty( $warehouses ) ) {
 			$warehouses = $this->get_warehouses();
 		}
@@ -673,8 +695,16 @@ class Integration extends \WC_Integration {
 				$products_in_warehouse = $this->get_warehouse_products( $warehouse['id'] );
 			}
 
-			if ( false === $products_in_warehouse ) {
+			if ( empty( $products_in_warehouse ) ) {
+
 				$this->get_plugin()->log( sprintf( 'Updating products source data in warehouse %s (%s)', $warehouse['title'], $warehouse['id'] ) );
+
+				$wpdb->query( 'START TRANSACTION' );
+
+				// Clear data
+				$wpdb->query(
+					$wpdb->prepare( "DELETE FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d", $warehouse['id'] )
+				);
 
 				$api_products = $this->get_api()->get_products_in_warehouse( $warehouse['id'] );
 				$cleaned_data = [];
@@ -689,28 +719,31 @@ class Integration extends \WC_Integration {
 
 						$product_sku = trim( $product->Code );
 
-						if ( array_key_exists( $product_sku, $cleaned_data ) ) {
-							continue;
-						}
-
-						$product_data = [
-							'Type'              => $product->Type,
-							'InventoryQty'      => $product->InventoryQty,
-							'ItemId'            => $product->ItemId,
-							'UnitofMeasureName' => $product->UnitofMeasureName,
+						$cleaned_data[ $product_sku ] = [
+							'sku'            => $product_sku,
+							'location_code'  => $warehouse['id'],
+							'product_type'   => $product->Type,
+							'stock_quantity' => $product->InventoryQty,
+							'item_id'        => $product->ItemId,
+							'uom_name'       => $product->UnitofMeasureName,
 						];
-
-						$cleaned_data[ $product_sku ] = (object) $product_data;
 					}
 				}
 
 				if ( ! empty( $cleaned_data ) ) {
 					$updated = true;
+
+					foreach ( $cleaned_data as $product_sku => $data ) {
+						$wpdb->insert(
+							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+							$data
+						);
+					}
 				}
 
-				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s). Total of products %d.', $warehouse['title'], $warehouse['id'], count( $cleaned_data ) ) );
+				$wpdb->query( 'COMMIT' );
 
-				$this->get_plugin()->set_cache( 'warehouse_' . $warehouse['id'], $cleaned_data, MINUTE_IN_SECONDS * intval( $this->get_option( 'stock_refresh_rate', 15 ) ) );
+				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s). Total of products %d.', $warehouse['title'], $warehouse['id'], count( $cleaned_data ) ) );
 			}
 		}
 
