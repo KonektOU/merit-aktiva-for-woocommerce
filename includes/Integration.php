@@ -354,12 +354,19 @@ class Integration extends \WC_Integration {
 
 		if ( ! empty( $products ) ) {
 			foreach ( $products as $product ) {
-
 				foreach ( $this->get_warehouses() as $warehouse ) {
 					$item_stock           = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 					$product_in_warehouse = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
 
 					if ( ! is_object( $item_stock ) || ! property_exists( $item_stock, 'InventoryQty' ) ) {
+						$wpdb->delete(
+							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+							[
+								'location_code' => $warehouse['id'],
+								'sku'           => $product->get_sku()
+							]
+						);
+
 						continue;
 					}
 
@@ -431,15 +438,19 @@ class Integration extends \WC_Integration {
 			$item_stock = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
 
 			if ( empty( $item_stock ) ) {
-				$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+				$api_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 
-				if ( $product->is_type( 'variable' ) ) {
-					if ( ! $product->managing_stock() && $product->get_stock_status() == 'outofstock' ) {
-						$product->set_stock_status( 'instock' );
+				if ( ! $api_stock ) {
+					$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+
+					if ( $product->is_type( 'variable' ) ) {
+						if ( ! $product->managing_stock() && $product->get_stock_status() == 'outofstock' ) {
+							$product->set_stock_status( 'instock' );
+						}
 					}
-				}
 
-				continue;
+					continue;
+				}
 			}
 
 			if ( 'Laokaup' != $item_stock['product_type'] ) {
