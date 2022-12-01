@@ -53,7 +53,7 @@ class Orders {
 			add_filter( 'request', array( $this, 'filter_orders_by_warehouse_id_query' ) );
 
 			// Validate products in cart
-			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products_quantity' ), 10, 3 );
+			add_filter( 'woocommerce_cart_item_required_stock_is_not_enough', array( $this, 'validate_cart_products_quantity' ), 10, 3 );
 
 			// Add custom order var
 			add_filter( 'woocommerce_order_data_store_cpt_get_orders_query', array( $this, 'add_custom_order_query_var' ), 10, 2 );
@@ -334,34 +334,29 @@ class Orders {
 	}
 
 
-	public function validate_cart_products_quantity( $data, $errors ) {
+	public function validate_cart_products_quantity( $not_enough, $product, $values ) {
 		if ( 'yes' === $this->integration->get_option( 'stock_sync_allowed', 'no' ) ) {
-			foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
-				$product_id  = $this->integration->get_wpml_original_post_id( $cart_item['data']->get_id() );
-				$product     = wc_get_product( $product_id );
+			$api_product = $this->get_api()->get_item( $product->get_sku() );
 
-				if ( $product ) {
-					$api_product = $this->get_api()->get_item( $product->get_sku() );
+			if ( $api_product && $api_product->Type == 'Laokaup' ) {
+				// Update quantities
+				$update_stock = $this->integration->manually_update_product_stock_data( $product );
 
-					if ( $api_product && $api_product->Type == 'Laokaup' ) {
-						// Update quantities
-						$update_stock = $this->integration->manually_update_product_stock_data( $product );
+				if ( $update_stock ) {
+					$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
+					$total_quantity     = ! empty( $product_quantities ) ? array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) : 0;
 
-						if ( $update_stock ) {
-							$product_quantities = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
-							$total_quantity     = ! empty( $product_quantities ) ? array_sum( wp_list_pluck( $product_quantities, 'quantity' ) ) : 0;
+					$product->set_stock_quantity( $total_quantity );
+					$product->save();
 
-							$product->set_stock_quantity( $total_quantity );
-							$product->save();
-
-							if ( $total_quantity <= 0 ) {
-								$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
-							}
-						}
+					if ( $total_quantity <= 0 ) {
+						$not_enough = true;
 					}
 				}
 			}
 		}
+
+		return $not_enough;
 	}
 
 
