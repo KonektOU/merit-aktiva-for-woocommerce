@@ -76,16 +76,11 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$product_id = $package_product['variation_id'] && $package_product['variation_id'] > 0 ? $package_product['variation_id'] : $package_product['product_id'];
 			$product_id = $this->get_integration()->get_wpml_original_post_id( $product_id );
 			$product    = wc_get_product( $product_id );
-			$warehouses = $this->get_plugin()->attach_product_quantities_by_warehouse( [], $product );
 
-			if ( ! empty( $warehouses ) ) {
-				foreach ( $warehouses as $warehouse ) {
-					if ( $this->warehouse === $warehouse['location'] ) {
-						if ( $warehouse['quantity'] > 0 && $package_product['quantity'] <= $warehouse['quantity'] ) {
-							$actual_products++;
-						}
-					}
-				}
+			$product_in_warehouse = $this->get_integration()->get_product_from_lookup_table( $product->get_sku(), $this->warehouse );
+
+			if ( $product_in_warehouse && $product_in_warehouse['stock_quantity'] >= $package_product['quantity'] ) {
+				$actual_products++;
 			}
 		}
 

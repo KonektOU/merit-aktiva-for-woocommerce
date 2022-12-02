@@ -219,7 +219,7 @@ class API extends Framework\SV_WC_API_Base {
 					$order_row['DiscountedPrice'] = $this->format_number( $order_row['Price'] - $order_row['DiscountAmount'] );
 				}
 
-				$product_uom = $this->get_plugin()->get_product_meta( $product, 'uom_name' );
+				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );
 
 				if ( $product_uom ) {
 					$order_row['Item']['UOMName'] = $product_uom;
@@ -480,7 +480,7 @@ class API extends Framework\SV_WC_API_Base {
 						$variation_product->save();
 					}
 
-					$product_uom = $this->get_plugin()->get_product_meta( $variation_product, 'uom_name' );
+					$product_uom = $this->integration->get_product_uom_from_lookup_table( $variation_product->get_sku() );
 
 					$items[] = [
 						'Type'            => self::ITEM_TYPE_STOCK_ITEM,
@@ -493,7 +493,7 @@ class API extends Framework\SV_WC_API_Base {
 					];
 				}
 			} else {
-				$product_uom = $this->get_plugin()->get_product_meta( $product, 'uom_name' );
+				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );;
 
 				$items[] = [
 					'Type'            => self::ITEM_TYPE_STOCK_ITEM,

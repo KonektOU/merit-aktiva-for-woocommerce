@@ -356,16 +356,10 @@ class Integration extends \WC_Integration {
 			foreach ( $products as $product ) {
 				foreach ( $this->get_warehouses() as $warehouse ) {
 					$item_stock           = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
-					$product_in_warehouse = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
+					$product_in_warehouse = $this->get_product_from_lookup_table( $product->get_sku(), $warehouse['id'] );
 
 					if ( ! is_object( $item_stock ) || ! property_exists( $item_stock, 'InventoryQty' ) ) {
-						$wpdb->delete(
-							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
-							[
-								'location_code' => $warehouse['id'],
-								'sku'           => $product->get_sku()
-							]
-						);
+						$this->remove_product_from_lookup_table( $product->get_sku(), $warehouse['id'] );
 
 						continue;
 					}
@@ -380,15 +374,7 @@ class Integration extends \WC_Integration {
 					];
 
 					if ( $product_in_warehouse ) {
-
-						$wpdb->update(
-							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
-							$product_data,
-							[
-								'location_code' => $warehouse['id'],
-								'sku'           => $product->get_sku(),
-							]
-						);
+						$this->update_product_in_lookup_table( $product->get_sku(), $warehouse['id'], $product_data );
 
 					} else {
 						$wpdb->insert(
@@ -412,36 +398,110 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function get_product_from_warehouse( $product_sku, $warehouse_id ) {
+	/**
+	 * Fetch product from lookup table
+	 *
+	 * @param string $product_sku
+	 * @param integer $warehouse_id
+	 *
+	 * @return array|null
+	 */
+	public function get_product_from_lookup_table( $product_sku, $warehouse_id = null ) {
 		global $wpdb;
 
 		if ( empty( $product_sku ) ) {
 			return null;
 		}
 
-		$product = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d AND sku = %s", $warehouse_id, $product_sku ),
-			ARRAY_A
-		);
+		if ( $warehouse_id ) {
+			$product = $wpdb->get_row(
+				$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d AND sku = %s", $warehouse_id, $product_sku ),
+				ARRAY_A
+			);
+		} else {
+			$product = $wpdb->get_results(
+				$wpdb->prepare( "SELECT * FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE sku = %s", $product_sku ),
+				ARRAY_A
+			);
+		}
 
 		return $product;
 	}
 
 
+	public function get_product_uom_from_lookup_table( $product_sku ) {
+		global $wpdb;
+
+		if ( empty( $product_sku ) ) {
+			return null;
+		}
+
+		$product_uom = $wpdb->get_var(
+			$wpdb->prepare( "SELECT uom_name FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE sku = %s LIMIT 1", $product_sku ),
+			ARRAY_A
+		);
+
+		return $product_uom;
+	}
+
+
+	/**
+	 * Update product in lookup table
+	 *
+	 * @param string $product_sku
+	 * @param integer $warehouse_id
+	 * @param array $data
+	 *
+	 * @return void
+	 */
+	public function update_product_in_lookup_table( $product_sku, $warehouse_id, $data ) {
+		global $wpdb;
+
+		$wpdb->update(
+			"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+			$data,
+			[
+				'location_code' => $warehouse_id,
+				'sku'           => $product_sku,
+			]
+		);
+	}
+
+
+	/**
+	 * Removes product from lookup table
+	 *
+	 * @param string $product_sku
+	 * @param integer $warehouse_id
+	 *
+	 * @return void
+	 */
+	public function remove_product_from_lookup_table( $product_sku, $warehouse_id ) {
+		global $wpdb;
+
+		$wpdb->delete(
+			"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+			[
+				'location_code' => $warehouse_id,
+				'sku'           => $product_sku,
+			]
+		);
+	}
+
+
 	public function update_product_stock_data( $product ) {
 		$warehouses     = $this->get_warehouses();
-		$quantities     = [];
 		$total_quantity = 0;
 
 		foreach ( $warehouses as $warehouse ) {
 
-			$item_stock = $this->get_product_from_warehouse( $product->get_sku(), $warehouse['id'] );
+			$item_stock = $this->get_product_from_lookup_table( $product->get_sku(), $warehouse['id'] );
 
 			if ( empty( $item_stock ) ) {
 				$api_stock = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 
 				if ( ! $api_stock ) {
-					$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+					$this->get_plugin()->remove_product_meta( $product, [ 'item_id' ] );
 
 					if ( $product->is_type( 'variable' ) ) {
 						if ( ! $product->managing_stock() && $product->get_stock_status() == 'outofstock' ) {
@@ -454,8 +514,6 @@ class Integration extends \WC_Integration {
 			}
 
 			if ( 'Laokaup' != $item_stock['product_type'] ) {
-				$quantities = null;
-
 				$product->set_manage_stock( false );
 				$product->set_stock_status( 'instock' );
 
@@ -471,29 +529,14 @@ class Integration extends \WC_Integration {
 			}
 
 			// Save item ID
-			$this->get_plugin()->add_product_meta( $product, [
-				'item_id'  => $item_stock['item_id'],
-				'uom_name' => $item_stock['uom_name'],
-			] );
+			$this->get_plugin()->add_product_meta( $product, 'item_id', $item_stock['item_id'] );
 
 			if ( $item_stock['stock_quantity'] ) {
 				$total_quantity += (int) $item_stock['stock_quantity'];
-
-				$quantities[] = [
-					'location' => $warehouse['id'],
-					'quantity' => wc_stock_amount( $item_stock['stock_quantity'] ),
-				];
 			}
 		}
 
-		if ( null !== $quantities && $product->managing_stock() ) {
-			// Save quantities to meta
-			$this->get_plugin()->add_product_meta(
-				$product,
-				[
-					'quantities_by_warehouse' => $quantities
-				]
-			);
+		if ( $product->managing_stock() ) {
 
 			if ( $total_quantity != $product->get_stock_quantity() ) {
 				$product->set_stock_quantity( $total_quantity );
@@ -503,8 +546,6 @@ class Integration extends \WC_Integration {
 				$product->set_stock_status( 'instock' );
 			}
 
-		} else {
-			$this->get_plugin()->remove_product_meta( $product, [ 'quantities_by_warehouse' ] );
 		}
 
 		if ( ! empty( $product->get_changes() ) ) {
@@ -660,19 +701,21 @@ class Integration extends \WC_Integration {
 	public function get_wpml_original_post_id( $post_id, $type = 'post_product' ) {
 		global $sitepress;
 
-		if ( ! $sitepress || ! defined( 'ICL_LANGUAGE_CODE' ) ) {
-			return $post_id;
-		}
+		if ( $sitepress && defined( 'ICL_LANGUAGE_CODE' ) ) {
+			$trid         = $sitepress->get_element_trid( $post_id, $type );
+			$translations = $sitepress->get_element_translations( $trid, $type );
 
-		$trid         = $sitepress->get_element_trid( $post_id, $type );
-		$translations = $sitepress->get_element_translations( $trid, $type );
+			if ( ! empty( $translations ) ) {
+				foreach ( $translations as $translation ) {
+					if ( $translation->original ) {
+						$post_id = $translation->element_id;
 
-		if ( ! empty( $translations ) ) {
-			foreach ( $translations as $translation ) {
-				if ( $translation->original ) {
-					return $translation->element_id;
+						break;
+					}
 				}
 			}
+		} elseif ( function_exists( 'pll_get_post' ) ) {
+			return pll_get_post( $post_id, pll_default_language() );
 		}
 
 		return $post_id;
@@ -1013,7 +1056,6 @@ class Integration extends \WC_Integration {
 
 			// Create products
 			$create_products = $this->get_api()->create_products( $products );
-			$last_creation   = date_i18n( 'Y-m-d H:i:s' );
 
 			$this->get_plugin()->add_notice(
 				'create-products',
@@ -1026,7 +1068,7 @@ class Integration extends \WC_Integration {
 			);
 
 			if ( true === $create_products ) {
-				do_action( 'konekt_merit_aktiva_created_products' );
+				do_action( 'konekt_merit_aktiva_created_products', $products );
 
 				// Sync stock
 				foreach ( $products as $product ) {
@@ -1038,15 +1080,10 @@ class Integration extends \WC_Integration {
 					$external_item = $this->get_api()->get_item( $product->get_sku() );
 
 					if ( $external_item ) {
-						$this->get_plugin()->add_product_meta( $product, [
-							'item_id'  => $external_item->ItemId,
-							'uom_name' => $external_item->UnitofMeasureName,
-							'created'  => $last_creation,
-						] );
+						$this->get_plugin()->add_product_meta( $product, 'item_id', $external_item->ItemId );
 					} else {
-						$this->get_plugin()->remove_product_meta( $product, [ 'item_id', 'uom_name' ] );
+						$this->get_plugin()->remove_product_meta( $product, [ 'item_id' ] );
 					}
-
 				}
 
 				$this->get_plugin()->log_action( __( 'End of this chunk.', 'konekt-merit-aktiva' ), 'create-products' );
@@ -1388,26 +1425,6 @@ class Integration extends \WC_Integration {
 					'compare' => '=',
 				];
 			}
-		}
-
-		if ( isset( $query_vars['merit_aktiva_created'] ) ) {
-			$query['meta_query'][] = [
-				'relation' => 'OR',
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
-					'compare' => 'NOT EXISTS',
-				],
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
-					'value'   => '',
-					'compare' => '=',
-				],
-				[
-					'key'     => $this->get_plugin()->get_meta_key( 'created' ),
-					'value'   => $query_vars['merit_aktiva_created'],
-					'compare' => '!=',
-				]
-			];
 		}
 
 		return $query;

@@ -219,30 +219,29 @@ class Plugin extends Framework\SV_WC_Plugin {
 			return [];
 		}
 
-		$quantities = $this->get_product_meta( $product, 'quantities_by_warehouse' );
+		$product_in_warehouses = $this->get_integration()->get_product_from_lookup_table( $product->get_sku() );
+		$quantities            = [];
 
-		if ( empty( $quantities ) ) {
-			$quantities = [];
+		if ( empty( $product_in_warehouses ) ) {
+			$product_in_warehouses = [];
 		}
 
 		foreach ( $this->get_integration()->get_warehouses() as $warehouse ) {
-			$warehouse_available = false;
+			$warehouse_quantity = 0;
 
-			foreach ( $quantities as $key => $quantity ) {
-				$quantities[$key]['location_title'] = $this->attach_warehouse_title( '', $quantity['location'] );
+			foreach ( $product_in_warehouses as $product ) {
+				if ( $product['location_code'] == $warehouse['id'] ) {
+					$warehouse_quantity = $product['stock_quantity'];
 
-				if ( $warehouse['id'] == $quantity['location'] ) {
-					$warehouse_available = true;
+					break;
 				}
 			}
 
-			if ( false === $warehouse_available ) {
-				$quantities[] = [
-					'location_title' => $this->attach_warehouse_title( '', $warehouse['id'] ),
-					'location'       => $warehouse['id'],
-					'quantity'       => 0,
-				];
-			}
+			$quantities[] = [
+				'location_title' => $this->attach_warehouse_title( '', $warehouse['id'] ),
+				'location'       => $warehouse['id'],
+				'quantity'       => $warehouse_quantity,
+			];
 		}
 
 		return $quantities;
