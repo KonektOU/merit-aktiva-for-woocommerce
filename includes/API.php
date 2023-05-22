@@ -468,6 +468,11 @@ class API extends Framework\SV_WC_API_Base {
 			$this->get_plugin()->log_action( sprintf( 'Creating %s (%s)', $product->get_name(), $product->get_sku() ), 'create-products' );
 
 			if ( $product->is_type( 'variable' ) ) {
+				// Disable managing stock on variable products
+				if ( $product->managing_stock() ) {
+					$product->set_manage_stock( false );
+				}
+
 				foreach ( $product->get_children() as $variation_id ) {
 					$variation_product = wc_get_product( $variation_id );
 
@@ -475,6 +480,7 @@ class API extends Framework\SV_WC_API_Base {
 						continue;
 					}
 
+					// Enable managing stock for variations
 					if ( ! $variation_product->managing_stock() ) {
 						$variation_product->set_manage_stock( true );
 						$variation_product->save();
@@ -493,7 +499,7 @@ class API extends Framework\SV_WC_API_Base {
 					];
 				}
 			} else {
-				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );;
+				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );
 
 				$items[] = [
 					'Type'            => self::ITEM_TYPE_STOCK_ITEM,
@@ -504,6 +510,14 @@ class API extends Framework\SV_WC_API_Base {
 					'DefLocationCode' => $this->integration->get_option( 'primary_warehouse_id', '1' ),
 					'TaxId'           => $this->integration->get_matching_tax_code( $product->get_tax_class() ),
 				];
+
+				if ( ! $product->managing_stock() ) {
+					$product->set_manage_stock( true );
+				}
+			}
+
+			if ( ! empty( $product->get_changes() ) ) {
+				$product->save();
 			}
 		}
 

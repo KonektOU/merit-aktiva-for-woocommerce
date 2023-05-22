@@ -261,6 +261,16 @@ class Plugin extends Framework\SV_WC_Plugin {
 	}
 
 
+	public function get_option( $name ) {
+		return get_option( 'wc_' . $this->get_id() . '_' . $name );
+	}
+
+
+	public function update_option( $name, $value ) {
+		update_option( 'wc_' . $this->get_id() . '_' . $name, $value, 'no' );
+	}
+
+
 	public function get_order_warehouse_id( $order ) {
 		$location_code = null;
 
@@ -403,13 +413,18 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	public function schedule_action( $action, $data = [], $recurring = null, $next_run = null ) {
 		if ( ! as_next_scheduled_action( $this->get_id() . '_' . $action, $data, $this->get_id() ) ) {
-			if ( null !== $recurring ) {
+			if ( null !== $recurring || null !== $recurring ) {
 				as_schedule_recurring_action( $next_run ?? time(), $recurring, $this->get_id()  . '_' . $action, $data, $this->get_id() );
 			}
 			else {
 				as_enqueue_async_action( $this->get_id() . '_' . $action, $data, $this->get_id() );
 			}
 		}
+	}
+
+
+	public function has_scheduled_action( $action, $data = [] ) {
+		return as_has_scheduled_action( $this->get_id() . '_' . $action, $data, $this->get_id() );
 	}
 
 

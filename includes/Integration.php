@@ -62,6 +62,9 @@ class Integration extends \WC_Integration {
 		// Add custom coupon data
 		add_action( 'woocommerce_coupon_options', array( $this, 'add_coupon_giftcard_option' ) );
 		add_action( 'woocommerce_coupon_options_save', array( $this, 'save_coupon_giftcard_option' ), 10, 2 );
+
+		// Remove item_id from being duplicated
+		add_filter( 'woocommerce_duplicate_product_exclude_meta', array( $this, 'remove_product_duplication_meta' ), 10, 1 );
 	}
 
 
@@ -198,6 +201,14 @@ class Integration extends \WC_Integration {
 				'label'   => __( 'Adds custom product tab to show product availability by warehouse. Only with multiple warehouses.', 'konekt-merit-aktiva' ),
 			],
 
+			'validate_checkout_stock' => [
+				'title'   => __( 'Check stock status on checkout', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Makes additional requests via API to check for latest stock status information.', 'konekt-merit-aktiva' ),
+			],
+
 			// Product
 			'product_section_title' => [
 				'title' => __( 'Product configuration', 'konekt-merit-aktiva' ),
@@ -243,11 +254,12 @@ class Integration extends \WC_Integration {
 			'sync_method' => [
 				'title'   => __( 'Sync method', 'konekt-merit-aktiva' ),
 				'type'    => 'select',
-				'default' => 'on-demand',
+				'default' => 'cron',
 				'options' => [
-					'on-demand' => __( 'On demand', 'konekt-merit-aktiva' ),
-					'relative'  => __( 'Relative', 'konekt-merit-aktiva' ),
-					'cron'      => __( 'Cron twice daily', 'konekt-merit-aktiva' ),
+					'cron'       => __( 'Cron twice daily', 'konekt-merit-aktiva' ),
+					'continuous' => __( 'Continuous', 'konekt-merit-aktiva' ),
+					'relative'   => __( 'Relative', 'konekt-merit-aktiva' ),
+					'on-demand'  => __( 'On demand', 'konekt-merit-aktiva' ),
 				]
 			],
 
@@ -377,18 +389,11 @@ class Integration extends \WC_Integration {
 						$this->update_product_in_lookup_table( $product->get_sku(), $warehouse['id'], $product_data );
 
 					} else {
-						$wpdb->insert(
-							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
-							$product_data,
-						);
+						$this->add_product_to_lookup_table( $product_data );
 					}
 
 					$this->update_product_stock_data( $product );
 				}
-			}
-
-			if ( $_product->is_type( 'variable' ) ) {
-				$_product->sync_stock_status( $_product );
 			}
 
 			return true;
@@ -469,6 +474,24 @@ class Integration extends \WC_Integration {
 
 
 	/**
+	 * Add product to lookup table
+	 *
+	 * @param string $product_sku
+	 * @param array $data
+	 *
+	 * @return void
+	 */
+	public function add_product_to_lookup_table( $data ) {
+		global $wpdb;
+
+		$wpdb->insert(
+			"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
+			$data,
+		);
+	}
+
+
+	/**
 	 * Removes product from lookup table
 	 *
 	 * @param string $product_sku
@@ -510,29 +533,42 @@ class Integration extends \WC_Integration {
 					}
 
 					continue;
+				} else {
+					$item_stock = [
+						'product_type'   => $api_stock->Type,
+						'stock_quantity' => $api_stock->InventoryQty,
+						'item_id'        => $api_stock->ItemId,
+						'uom_name'       => $api_stock->UnitofMeasureName,
+						'sku'            => $product->get_sku(),
+						'location_code'  => $warehouse['id'],
+					];
+
+					$this->add_product_to_lookup_table( $item_stock );
 				}
 			}
 
-			if ( 'Laokaup' != $item_stock['product_type'] ) {
-				$product->set_manage_stock( false );
-				$product->set_stock_status( 'instock' );
+			if ( $item_stock ) {
+				if ( 'Laokaup' != $item_stock['product_type'] ) {
+					$product->set_manage_stock( false );
+					$product->set_stock_status( 'instock' );
 
-				break;
-			}
+					break;
+				}
 
-			// Manage stock
-			if ( $product->is_type( 'variable' ) ) {
-				$product->set_manage_stock( false );
-				$product->set_stock_status( 'instock' );
-			} else {
-				$product->set_manage_stock( true );
-			}
+				// Manage stock
+				if ( $product->is_type( 'variable' ) ) {
+					$product->set_manage_stock( false );
+					$product->set_stock_status( 'instock' );
+				} else {
+					$product->set_manage_stock( true );
+				}
 
-			// Save item ID
-			$this->get_plugin()->add_product_meta( $product, 'item_id', $item_stock['item_id'] );
+				// Save item ID
+				$this->get_plugin()->add_product_meta( $product, 'item_id', $item_stock['item_id'] );
 
-			if ( $item_stock['stock_quantity'] ) {
-				$total_quantity += (int) $item_stock['stock_quantity'];
+				if ( $item_stock['stock_quantity'] ) {
+					$total_quantity += (int) $item_stock['stock_quantity'];
+				}
 			}
 		}
 
@@ -578,6 +614,11 @@ class Integration extends \WC_Integration {
 		return $methods;
 	}
 
+	public function is_continuous_sync_method() {
+
+		return 'continuous' === $this->get_option( 'sync_method', 'on-demand' );
+	}
+
 
 	public function schedule_cron() {
 
@@ -590,8 +631,19 @@ class Integration extends \WC_Integration {
 				}
 			}
 		}
+		elseif ( $this->is_continuous_sync_method() ) {
+			foreach ( $this->get_warehouses() as $key => $warehouse ) {
+				$this->get_plugin()->schedule_action( 'warehouse_update_job', [ $warehouse, false ], HOUR_IN_SECONDS, time() );
+			}
+
+			if ( ! $this->get_plugin()->has_scheduled_action( 'continuous_job', [] ) ) {
+				$this->get_plugin()->schedule_action( 'continuous_job' , [], 1 * MINUTE_IN_SECONDS );
+			}
+		}
 
 		// Action Scheduler
+		$this->get_plugin()->hook_action( 'warehouse_update_job', array( $this, 'update_warehouses_job_hook' ) );
+		$this->get_plugin()->hook_action( 'continuous_job', array( $this, 'continuous_job_hook' ) );
 		$this->get_plugin()->hook_action( 'cron_job', array( $this, 'cron_hook' ) );
 		$this->get_plugin()->hook_action( 'manual_product_update', array( $this, 'cron_hook' ) );
 		$this->get_plugin()->hook_action( 'product_update', array( $this, 'cron_products_hook' ) );
@@ -600,7 +652,7 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function cron_hook( $warehouse, $manual_update = false ) {
+	public function cron_hook( $warehouse, $manual_update = false, $update_products = true ) {
 
 		$this->get_plugin()->log( 'Starting cron' );
 
@@ -612,7 +664,7 @@ class Integration extends \WC_Integration {
 		$time_start       = microtime( true );
 		$update_warehouse = $this->update_warehouse_products( true, [ $warehouse ] );
 
-		if ( $update_warehouse ) {
+		if ( $update_warehouse && $update_products ) {
 			$this->get_plugin()->unschedule_all_actions( 'product_update' );
 			$this->get_plugin()->schedule_action( 'product_update', [ 1, $manual_update ] );
 		}
@@ -624,22 +676,84 @@ class Integration extends \WC_Integration {
 	}
 
 
+	public function update_warehouses_job_hook( $warehouse ) {
+		$this->update_warehouse_products( true, [ $warehouse ] );
+	}
+
+
+	public function continuous_job_hook() {
+		$warehouses        = $this->get_warehouses();
+		$current_warehouse = (int) $this->get_plugin()->get_option( 'continuous_warehouse' );
+		$page              = (int) $this->get_plugin()->get_option( 'continuous_page_num' ) ?: 1;
+
+		if ( ( empty( $current_warehouse ) && -1 != $current_warehouse ) && ! empty( $warehouses ) ) {
+			$current_warehouse = reset( $warehouses )['id'];
+		}
+
+		if ( -1 === $current_warehouse ) {
+			// Update products
+			$update = $this->cron_products_hook( $page, false );
+
+			if ( true === $update ) {
+				// Finished updates.
+				$this->get_plugin()->update_option( 'continuous_warehouse', reset( $warehouses ) );
+				$this->get_plugin()->update_option( 'continuous_page_num', 1 );
+			} elseif ( false === $update ) {
+				// Not finished yet.
+				$this->get_plugin()->update_option( 'continuous_warehouse', -1 );
+				$this->get_plugin()->update_option( 'continuous_page_num', $page + 1 );
+			} else {
+				// We are stuck somehow
+			}
+		} elseif ( $current_warehouse ) {
+			$next_warehouse = false;
+			$found_current  = false;
+
+			foreach ( $warehouses as $warehouse ) {
+				if ( $warehouse['id'] == $current_warehouse ) {
+					$found_current = true;
+
+					$this->get_plugin()->log_action( sprintf( __( 'Updating %s warehouse products.', 'konekt-merit-aktiva' ), $warehouse['title'] ), 'update-products' );
+
+					$this->update_warehouse_products( true, [ $warehouse ] );
+				} elseif ( true === $found_current && false === $next_warehouse ) {
+					$next_warehouse = $warehouse;
+
+					break;
+				}
+			}
+
+			if ( false === $next_warehouse ) {
+				$this->get_plugin()->update_option( 'continuous_warehouse', -1 );
+			} else {
+				$this->get_plugin()->update_option( 'continuous_warehouse', $next_warehouse['id'] );
+			}
+		}
+	}
+
+
 	public function cron_products_hook( $page = 1, $manual_update = false ) {
 		$this->get_plugin()->log_action( sprintf( 'Fetching products for an update, page %d.', $page ), 'update-products' );
 
 		// Remove existing product updates
 		$this->get_plugin()->unschedule_all_actions( 'product_update' );
 
-		$results = wc_get_products( [
+		$args = [
 			'type'     => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),
 			'return'   => 'ids',
-			'limit'    => 25,
+			'limit'    => 100,
 			'order'    => 'DESC',
 			'orderby'  => 'post_type',
 			'status'   => 'publish',
 			'paginate' => true,
 			'page'     => $page,
-		] );
+		];
+
+		if ( function_exists( 'pll_default_language' ) ) {
+			$args['lang'] = pll_default_language();
+		}
+
+		$results = wc_get_products( $args );
 
 		foreach ( $results->products as $product_id ) {
 			$product_id = $this->get_wpml_original_post_id( $product_id );
@@ -648,14 +762,6 @@ class Integration extends \WC_Integration {
 			if ( $product ) {
 				if ( ! $product->is_type( 'external' ) ) {
 					$this->update_product_stock_data( $product );
-				}
-
-				if ( $product->is_type( 'variable' ) ) {
-					$product->sync_stock_status( $product );
-				}
-
-				if ( ! empty( $product->get_changes() ) ) {
-					$product->save();
 				}
 			}
 		}
@@ -668,7 +774,12 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->log_action( sprintf( __( 'Updated %d products, page %d of %d. Total products %d.', 'konekt-merit-aktiva' ), count( $results->products ), $page, $results->max_num_pages, $results->total ), 'update-products' );
 
 		if ( $results->max_num_pages > $page ) {
-			$this->get_plugin()->schedule_action( 'product_update', [ $page + 1 ] );
+
+			if ( ! $this->is_continuous_sync_method() ) {
+				$this->get_plugin()->schedule_action( 'product_update', [ $page + 1 ] );
+			}
+
+			return false;
 		}
 		elseif ( $results->max_num_pages == $page ) {
 			$this->get_plugin()->log_action( sprintf( 'End of product updates. Updated total of %d.', $results->total ), 'update-products' );
@@ -676,7 +787,11 @@ class Integration extends \WC_Integration {
 			if ( true === $manual_update ) {
 				$this->get_plugin()->add_notice( 'manual_stock_sync', __( 'Finished product stock syncing.', 'konekt-merit-aktiva' ) );
 			}
+
+			return true;
 		}
+
+		return false;
 	}
 
 
@@ -773,6 +888,10 @@ class Integration extends \WC_Integration {
 
 						$product_sku = trim( $product->Code );
 
+						if ( ! $product_sku ) {
+							continue;
+						}
+
 						$cleaned_data[ $product_sku ] = [
 							'sku'            => $product_sku,
 							'location_code'  => $warehouse['id'],
@@ -788,10 +907,7 @@ class Integration extends \WC_Integration {
 					$updated = true;
 
 					foreach ( $cleaned_data as $product_sku => $data ) {
-						$wpdb->insert(
-							"{$wpdb->prefix}wc_merit_aktiva_product_lookup",
-							$data
-						);
+						$this->add_product_to_lookup_table( $data );
 					}
 				}
 
@@ -845,7 +961,7 @@ class Integration extends \WC_Integration {
 
 				$formatted[] = [
 					'id'    => $warehouse[0],
-					'title' => $warehouse[1],
+					'title' => $this->translate_warehouse_title( $warehouse[1] ),
 				];
 			}
 
@@ -856,6 +972,18 @@ class Integration extends \WC_Integration {
 			'id'    => 0,
 			'title' => '',
 		];
+	}
+
+	public function translate_warehouse_title( $title ) {
+		if ( function_exists( 'pll_register_string' ) ) {
+			pll_register_string( 'Warehouse title', $title, $this->get_plugin()->get_plugin_name() );
+
+			return pll__( $title );
+		}
+
+		do_action( 'wpml_register_single_string', $this->get_plugin()->get_plugin_name(), 'Warehouse title', $title );
+
+		return apply_filters( 'wpml_translate_single_string', $title, 'konekt-merit-aktiva', 'Warehouse title' );
 	}
 
 
@@ -1045,8 +1173,6 @@ class Integration extends \WC_Integration {
 			$this->get_plugin()->log_action( __( 'Did not find any products.', 'konekt-merit-aktiva' ), 'create-products' );
 			$this->get_plugin()->add_notice( 'create-products', __( 'Did not find any products.', 'konekt-merit-aktiva' ) );
 		}
-
-		wp_safe_redirect( add_query_arg( 'start', '1', $this->get_plugin()->get_settings_url() ) );
 	}
 
 
@@ -1111,8 +1237,6 @@ class Integration extends \WC_Integration {
 		} else {
 			$this->get_plugin()->add_notice( 'create-products', sprintf( __( 'Created total of %d products.', 'konekt-merit-aktiva' ), $total_products ) );
 		}
-
-		wp_safe_redirect( add_query_arg( 'done', '1', $this->get_plugin()->get_settings_url() ) );
 	}
 
 	public function generate_payment_methods_mapping_table_html( $key, $data ) {
@@ -1428,6 +1552,23 @@ class Integration extends \WC_Integration {
 		}
 
 		return $query;
+	}
+
+
+	/**
+	 * Do not duplicate item ID meta when duplicating product
+	 *
+	 * @param array $excluded_meta
+	 *
+	 * @return array
+	 */
+	function remove_product_duplication_meta( $excluded_meta ) {
+		$excluded_meta[] = $this->get_plugin()->get_meta_key( 'item_id' );
+		$excluded_meta[] = $this->get_plugin()->get_meta_key( 'quantities_by_warehouse' );
+		$excluded_meta[] = $this->get_plugin()->get_meta_key( 'created' );
+		$excluded_meta[] = $this->get_plugin()->get_meta_key( 'uom_name' );
+
+		return $excluded_meta;
 	}
 
 
