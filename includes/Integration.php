@@ -366,7 +366,7 @@ class Integration extends \WC_Integration {
 
 		if ( ! empty( $products ) ) {
 			foreach ( $products as $product ) {
-				foreach ( $this->get_warehouses() as $warehouse ) {
+				foreach ( $this->get_warehouses( false ) as $warehouse ) {
 					$item_stock           = $this->get_api()->get_item_stock( $product->get_sku(), $warehouse['id'] );
 					$product_in_warehouse = $this->get_product_from_lookup_table( $product->get_sku(), $warehouse['id'] );
 
@@ -513,7 +513,7 @@ class Integration extends \WC_Integration {
 
 
 	public function update_product_stock_data( $product ) {
-		$warehouses     = $this->get_warehouses();
+		$warehouses     = $this->get_warehouses( false );
 		$total_quantity = 0;
 
 		foreach ( $warehouses as $warehouse ) {
@@ -623,7 +623,7 @@ class Integration extends \WC_Integration {
 	public function schedule_cron() {
 
 		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
-			foreach ( $this->get_warehouses() as $key => $warehouse ) {
+			foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
 				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) + ( ( HOUR_IN_SECONDS * $key ) + 1 ) );
 
 				if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
@@ -632,7 +632,7 @@ class Integration extends \WC_Integration {
 			}
 		}
 		elseif ( $this->is_continuous_sync_method() ) {
-			foreach ( $this->get_warehouses() as $key => $warehouse ) {
+			foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
 				$this->get_plugin()->schedule_action( 'warehouse_update_job', [ $warehouse, false ], HOUR_IN_SECONDS, time() );
 			}
 
@@ -682,7 +682,7 @@ class Integration extends \WC_Integration {
 
 
 	public function continuous_job_hook() {
-		$warehouses        = $this->get_warehouses();
+		$warehouses        = $this->get_warehouses( false );
 		$current_warehouse = (int) $this->get_plugin()->get_option( 'continuous_warehouse' );
 		$page              = (int) $this->get_plugin()->get_option( 'continuous_page_num' ) ?: 1;
 
@@ -742,8 +742,8 @@ class Integration extends \WC_Integration {
 			'type'     => array_merge( [ 'variation' ], array_keys( wc_get_product_types() ) ),
 			'return'   => 'ids',
 			'limit'    => 100,
-			'order'    => 'DESC',
-			'orderby'  => 'post_type',
+			'order'    => 'ASC',
+			'orderby'  => 'ID',
 			'status'   => 'publish',
 			'paginate' => true,
 			'page'     => $page,
@@ -851,7 +851,7 @@ class Integration extends \WC_Integration {
 		global $wpdb;
 
 		if ( empty( $warehouses ) ) {
-			$warehouses = $this->get_warehouses();
+			$warehouses = $this->get_warehouses( false );
 		}
 
 		$updated = false;
@@ -944,7 +944,7 @@ class Integration extends \WC_Integration {
 	}
 
 
-	public function get_warehouses() {
+	public function get_warehouses( $translate = true ) {
 
 		$warehouses = explode( "\n", $this->get_option( 'warehouses', [] ) );
 
@@ -961,7 +961,7 @@ class Integration extends \WC_Integration {
 
 				$formatted[] = [
 					'id'    => $warehouse[0],
-					'title' => $this->translate_warehouse_title( $warehouse[1] ),
+					'title' => $translate ? $this->translate_warehouse_title( $warehouse[1] ) : $warehouse[1],
 				];
 			}
 
@@ -1120,7 +1120,7 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->log( 'Starting manual sync' );
 		$this->get_plugin()->add_notice( 'manual_stock_sync', __( 'Running product stock sync.', 'konekt-merit-aktiva' ) );
 
-		foreach ( $this->get_warehouses() as $key => $warehouse ) {
+		foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
 			$this->get_plugin()->schedule_action( 'manual_product_update', [ $warehouse, true ] );
 		}
 	}
