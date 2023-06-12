@@ -589,9 +589,13 @@ class API extends Framework\SV_WC_API_Base {
 
 
 	public function get_order( $order_id ) {
+		// Set v2 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) . '_v2' ];
+
 		$order        = wc_get_order( $order_id );
 		$request_data = [
-			'Id' => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
+			'Id'            => $this->get_plugin()->get_order_meta( $order, 'invoice_id' ),
+			'AddAttachment' => false,
 		];
 
 		$request = $this->perform_request(
@@ -600,6 +604,9 @@ class API extends Framework\SV_WC_API_Base {
 				'data' => $request_data,
 			] )
 		);
+
+		// Set v1 URL
+		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization', 'estonian' ) ];
 
 		return empty( $request ) ? null : $request->response_data;
 	}

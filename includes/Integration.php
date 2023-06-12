@@ -65,6 +65,9 @@ class Integration extends \WC_Integration {
 
 		// Remove item_id from being duplicated
 		add_filter( 'woocommerce_duplicate_product_exclude_meta', array( $this, 'remove_product_duplication_meta' ), 10, 1 );
+
+		//
+		add_action( 'wc_' . $this->get_plugin()->get_id() . '_updated', array( $this, 'clear_schedules_on_update' ) );
 	}
 
 
@@ -249,6 +252,14 @@ class Integration extends \WC_Integration {
 				'type'        => 'number',
 				'default'     => '30',
 				'description' => __( 'How often (in days) product data is fetched from API?', 'konekt-merit-aktiva' )
+			],
+
+			'sync_paused' => [
+				'title'   => __( 'Pause sync', 'konekt-merit-aktiva' ),
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'value'   => 'yes',
+				'label'   => __( 'Sync will be paused when this is checked.', 'konekt-merit-aktiva' ),
 			],
 
 			'sync_method' => [
@@ -622,23 +633,27 @@ class Integration extends \WC_Integration {
 
 	public function schedule_cron() {
 
-		if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
-			foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
-				$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) + ( ( HOUR_IN_SECONDS * $key ) + 1 ) );
+		if ( 'no' === $this->get_option( 'sync_paused', 'no' ) ) {
+			if ( 'cron' === $this->get_option( 'sync_method', 'on-demand' ) ) {
+				foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
+					$this->get_plugin()->schedule_action( 'cron_job', [ $warehouse, false ], DAY_IN_SECONDS / 2, time() + ( DAY_IN_SECONDS / 2 ) + ( ( HOUR_IN_SECONDS * $key ) + 1 ) );
 
-				if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
-					wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
+					if ( wp_next_scheduled( 'konekt_merit_aktiva_cron_job', [ $warehouse ] ) ) {
+						wp_clear_scheduled_hook( 'konekt_merit_aktiva_cron_job', [ $warehouse ] );
+					}
 				}
 			}
-		}
-		elseif ( $this->is_continuous_sync_method() ) {
-			foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
-				$this->get_plugin()->schedule_action( 'warehouse_update_job', [ $warehouse, false ], HOUR_IN_SECONDS, time() );
-			}
+			elseif ( $this->is_continuous_sync_method() ) {
+				foreach ( $this->get_warehouses( false ) as $key => $warehouse ) {
+					$this->get_plugin()->schedule_action( 'warehouse_update_job', [ $warehouse, false ], HOUR_IN_SECONDS, time() );
+				}
 
-			if ( ! $this->get_plugin()->has_scheduled_action( 'continuous_job', [] ) ) {
-				$this->get_plugin()->schedule_action( 'continuous_job' , [], 1 * MINUTE_IN_SECONDS );
+				if ( ! $this->get_plugin()->has_scheduled_action( 'continuous_job', [] ) ) {
+					$this->get_plugin()->schedule_action( 'continuous_job' , [], 1 * MINUTE_IN_SECONDS );
+				}
 			}
+		} else {
+			$this->unschedule_all_crons();
 		}
 
 		// Action Scheduler
@@ -649,6 +664,23 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->hook_action( 'product_update', array( $this, 'cron_products_hook' ) );
 		$this->get_plugin()->hook_action( 'create_chunk_of_products', array( $this, 'as_action_create_chunk_of_products' ), 10, 3 );
 		$this->get_plugin()->hook_action( 'end_of_product_creation_message', array( $this, 'as_action_end_of_product_creation_message' ) );
+	}
+
+
+	public function unschedule_all_crons() {
+		$this->get_plugin()->unschedule_all_actions( 'warehouse_update_job' );
+		$this->get_plugin()->unschedule_all_actions( 'continuous_job' );
+		$this->get_plugin()->unschedule_all_actions( 'cron_job' );
+	}
+
+
+	public function clear_schedules_on_update() {
+		$this->unschedule_all_crons();
+
+		$this->get_plugin()->unschedule_all_actions( 'product_update' );
+
+		$this->update_option( 'continuous_warehouse', null );
+		$this->update_option( 'continuous_page_num', 1 );
 	}
 
 
@@ -1136,14 +1168,21 @@ class Integration extends \WC_Integration {
 		$this->get_plugin()->log_action( 'Starting manual product creation', 'create-products' );
 
 		$products_per_page = 10;
-		$products_ids      = wc_get_products( [
+		$products_args     = [
 			'limit'                => -1,
 			'paginate'             => false,
 			'type'                 => [ 'simple', 'variation' ],
 			'return'               => 'ids',
 			'status'               => 'publish',
 			'merit_aktiva_item_id' => '',
-		] );
+		];
+
+		if ( function_exists( 'pll_default_language' ) ) {
+			$products_args['lang'] = pll_default_language();
+		}
+
+		$products_ids = wc_get_products( $products_args );
+
 
 		$this->get_plugin()->delete_cache( 'create_products' );
 

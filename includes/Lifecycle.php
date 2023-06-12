@@ -17,6 +17,7 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 	protected $upgrade_versions = [
 		'1.0.34',
 		'1.0.36',
+		'1.1',
 	];
 
 	public function upgrade_to_1_0_34( $installed_version ) {
