@@ -214,9 +214,9 @@ class API extends Framework\SV_WC_API_Base {
 					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
 
 					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
-					$order_row['Price']           = round( $order_item->get_subtotal( 'edit' ), 2 ); // no VAT, no discount
+					$order_row['Price']           = round( ( $order_item->get_subtotal( 'edit' ) ) / $order_item->get_quantity(), 7 ); // no VAT, no discount
 					$order_row['DiscountAmount']  = $this->format_number( $discount_amount );
-					$order_row['DiscountedPrice'] = $this->format_number( $order_row['Price'] - $order_row['DiscountAmount'] );
+					$order_row['DiscountedPrice'] = $this->format_number( $order_item->get_subtotal( 'edit' ) - $order_row['DiscountAmount'] );
 				}
 
 				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );
@@ -246,7 +246,7 @@ class API extends Framework\SV_WC_API_Base {
 			}
 
 			if ( ! empty( $order_row['DiscountedPrice'] ) ) {
-				$total_amount += $this->format_number( $order_row['DiscountedPrice'] * $order_row['Quantity'] );
+				$total_amount += $this->format_number( $order_row['DiscountedPrice'] );
 			}
 			else {
 				$total_amount += $this->format_number( $order_row['Price'] * $order_row['Quantity'] );
@@ -346,6 +346,8 @@ class API extends Framework\SV_WC_API_Base {
 				}
 			}
 		}
+
+		$this->get_plugin()->log_action( print_r( $invoice, true ), 'create-invoice' );
 
 		$response = $this->perform_request(
 			$this->get_new_request( [
