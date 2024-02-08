@@ -347,8 +347,6 @@ class API extends Framework\SV_WC_API_Base {
 			}
 		}
 
-		$this->get_plugin()->log_action( print_r( $invoice, true ), 'create-invoice' );
-
 		$response = $this->perform_request(
 			$this->get_new_request( [
 				'method' => 'POST',
