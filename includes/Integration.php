@@ -731,7 +731,9 @@ class Integration extends \WC_Integration {
 
 			if ( true === $update ) {
 				// Finished updates.
-				$this->get_plugin()->update_option( 'continuous_warehouse', reset( $warehouses ) );
+				// The id, as everywhere else this option is written and as the
+				// (int) cast that reads it expects - not the whole warehouse.
+				$this->get_plugin()->update_option( 'continuous_warehouse', ! empty( $warehouses ) ? reset( $warehouses )['id'] : -1 );
 				$this->get_plugin()->update_option( 'continuous_page_num', 1 );
 			} elseif ( false === $update ) {
 				// Not finished yet.
@@ -975,19 +977,22 @@ class Integration extends \WC_Integration {
 	 */
 	public function get_taxes() {
 		if ( false === ( $taxes = $this->get_plugin()->get_cache( 'taxes' ) ) ) {
-			$taxes = $this->get_api()->get_taxes();
+			$taxes = (array) $this->get_api()->get_taxes();
 
-			if ( ! empty( $taxes ) ) {
-				$taxes = (array) $taxes;
-			} else {
-				$taxes = [];
-			}
-
-			$this->get_plugin()->set_cache( 'taxes', $taxes, MONTH_IN_SECONDS );
-
+			// A month is the right life for an answer and the wrong one for a
+			// failure: a key that had expired, or an account without an API
+			// licence, left the tax mapping screen with nothing to choose from
+			// for a month and no way to ask again. Short enough to retry soon,
+			// long enough that one render of that screen - which asks once per
+			// WooCommerce tax rate - does not ask Merit a dozen times.
+			$this->get_plugin()->set_cache(
+				'taxes',
+				$taxes,
+				empty( $taxes ) ? 5 * MINUTE_IN_SECONDS : MONTH_IN_SECONDS
+			);
 		}
 
-		return $taxes ?? [];
+		return (array) $taxes;
 	}
 
 
@@ -1312,7 +1317,10 @@ class Integration extends \WC_Integration {
 		$data          = wp_parse_args( $data, $default_args );
 		$row_counter   = 0;
 		$values        = (array) $this->get_option( $key, array() );
-		$payment_types = $this->get_api()->get_payment_types();
+		// Merit answers with nothing when the key is wrong, expired, or the
+		// account has no API licence - and this screen is exactly where
+		// somebody goes to fix that, so it must render rather than warn.
+		$payment_types = (array) $this->get_api()->get_payment_types();
 
 		ob_start();
 		?>

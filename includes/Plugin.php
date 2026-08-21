@@ -10,7 +10,7 @@ namespace Konekt\WooCommerce\Merit_Aktiva;
 
 defined( 'ABSPATH' ) or exit;
 
-use SkyVerge\WooCommerce\PluginFramework\v5_6_1 as Framework;
+use SkyVerge\WooCommerce\PluginFramework\v6_2_4 as Framework;
 
 /**
  * @since 1.0.0
@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.1.1';
+	const VERSION = '1.2.0';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -503,7 +503,11 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 */
 	protected function get_file() {
 
-		return __DIR__;
+		// The plugin's main file, which is what the framework wants: it takes
+		// the plugin path, URL and basename off this. __DIR__ happened to
+		// produce the same answers because it is one level down, but the
+		// framework is entitled to stop being forgiving about that.
+		return dirname( __DIR__ ) . '/merit-aktiva-for-woocommerce.php';
 	}
 
 

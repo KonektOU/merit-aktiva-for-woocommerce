@@ -5,7 +5,7 @@
  * Description: Supercharge your WooCommerce with Merit Aktiva integration for seamless orders data exchange.
  * Author: Konekt
  * Author URI: https://konekt.ee
- * Version: 1.1.1
+ * Version: 1.2.0
  * Text Domain: konekt-merit-aktiva
  * Domain Path: /i18n/languages/
  *
@@ -24,7 +24,7 @@ class Konekt_WC_Merit_Aktiva {
 
 
 	/** minimum PHP version required by this plugin */
-	const MINIMUM_PHP_VERSION = '7.0.0';
+	const MINIMUM_PHP_VERSION = '7.4';
 
 	/** minimum WordPress version required by this plugin */
 	const MINIMUM_WP_VERSION = '4.4';
@@ -33,7 +33,7 @@ class Konekt_WC_Merit_Aktiva {
 	const MINIMUM_WC_VERSION = '5.0';
 
 	/** SkyVerge plugin framework version used by this plugin */
-	const FRAMEWORK_VERSION = '5.6.1';
+	const FRAMEWORK_VERSION = '6.2.4';
 
 	/** the plugin name, for displaying notices */
 	const PLUGIN_NAME = 'Merit Aktiva for WooCommerce';

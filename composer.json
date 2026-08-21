@@ -16,6 +16,6 @@
         }
     ],
     "require" : {
-        "skyverge/wc-plugin-framework": "5.6.1"
+        "skyverge/wc-plugin-framework": "6.2.4"
     }
 }

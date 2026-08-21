@@ -8,7 +8,7 @@
 
 namespace Konekt\WooCommerce\Merit_Aktiva;
 
-use SkyVerge\WooCommerce\PluginFramework\v5_6_1 as Framework;
+use SkyVerge\WooCommerce\PluginFramework\v6_2_4 as Framework;
 
 defined( 'ABSPATH' ) or exit;
 
@@ -590,7 +590,7 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		return $request->response_data;
+		return empty( $request ) ? null : $request->response_data;
 	}
 
 
@@ -610,7 +610,13 @@ class API extends Framework\SV_WC_API_Base {
 			] )
 		);
 
-		$response = empty( $request ) ? null : reset( $request->response_data );
+		// Merit answers a refused request with a line of plain text, not JSON,
+		// so there is a response object with nothing decoded in it. reset()
+		// was handed that null and threw - in the middle of reading a product,
+		// which is a fatal on a product page or in the middle of a cron run.
+		$items = ( ! empty( $request ) && is_array( $request->response_data ) ) ? $request->response_data : [];
+
+		$response = empty( $items ) ? null : reset( $items );
 
 		if ( $response && $response->Code !== $product_sku ) {
 			$this->get_plugin()->log( sprintf( 'Wrong item data fetched. Tried %s, got %s.', $product_sku, $response->Code ) );
