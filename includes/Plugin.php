@@ -516,7 +516,12 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 		require_once( $this->get_plugin_path() . '/includes/Setup_Wizard.php' );
 
-		$this->setup_wizard = new Setup_Wizard( $this );
+		/* Built at init, not here: the steps are named with __(), and this runs at
+		   plugins_loaded, which asks WordPress for a translation before the locale
+		   is settled. Everything the wizard hooks runs after init anyway. */
+		add_action( 'init', function () {
+			$this->setup_wizard = new Setup_Wizard( $this );
+		}, 5 );
 	}
 
 
