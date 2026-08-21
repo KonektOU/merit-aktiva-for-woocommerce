@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.4.0';
+	const VERSION = '1.5.0';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -50,6 +50,9 @@ class Plugin extends Framework\SV_WC_Plugin {
 
 	/** @var string cache transient prefix */
 	private $cache_prefix;
+
+	/** @var \Konekt\WooCommerce\Merit_Aktiva\Setup_Wizard|null the onboarding wizard */
+	private $setup_wizard = null;
 
 
 	/**
@@ -92,6 +95,8 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function init_plugin() {
 
 		$this->load_integration();
+
+		$this->init_setup_wizard();
 
 		// Add integration
 		add_filter( 'woocommerce_integrations', array( $this, 'load_integration' ) );
@@ -486,6 +491,37 @@ class Plugin extends Framework\SV_WC_Plugin {
 	public function get_documentation_url() {
 
 		return 'https://konekt.ee/woocommerce/merit-aktiva';
+	}
+
+
+	/**
+	 * Build the onboarding wizard.
+	 *
+	 * Not through the framework's init_setup_wizard_handler(), which it
+	 * deprecated in 6.x; the wizard class itself is still current, and does all
+	 * of its own work from its constructor - including checking that this is an
+	 * admin request by somebody allowed to see it.
+	 *
+	 * @return void
+	 */
+	private function init_setup_wizard() {
+
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		require_once( $this->get_plugin_path() . '/includes/Setup_Wizard.php' );
+
+		$this->setup_wizard = new Setup_Wizard( $this );
+	}
+
+
+	/**
+	 * @return \Konekt\WooCommerce\Merit_Aktiva\Setup_Wizard|null
+	 */
+	public function get_setup_wizard_handler() {
+
+		return $this->setup_wizard;
 	}
 
 

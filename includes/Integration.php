@@ -196,8 +196,20 @@ class Integration extends \WC_Integration {
 	private function render_settings_tabs_assets() {
 		?>
 		<style>
-			.merit-aktiva-tabs { margin-bottom: 0; }
+			/* WooCommerce indents .nav-tab-wrapper by 24px on its settings
+			   screens - body.woocommerce_page_wc-settings .nav-tab-wrapper -
+			   which leaves the first tab out of line with the heading and
+			   everything under it. Matched selector, so it takes. */
+			body.woocommerce_page_wc-settings .nav-tab-wrapper.merit-aktiva-tabs,
+			.merit-aktiva-tabs { margin-bottom: 0; padding-left: 0; }
 			.merit-aktiva-panel > .form-table:first-of-type { margin-top: .5em; }
+			/* Settings read badly stretched across a wide monitor: a label on
+			   the far left and its control on the far right, and the mapping
+			   tables - which build a table of their own inside a field - worst
+			   of all. */
+			.merit-aktiva-panel { max-width: 1100px; }
+			.merit-aktiva-panel .forminp table.form-table { max-width: 780px; }
+			.merit-aktiva-panel .forminp table.form-table td { padding-right: 1em; }
 			.merit-aktiva-panel h3.wc-settings-sub-title { margin-top: 1.5em; }
 		</style>
 		<script>
@@ -1413,6 +1425,20 @@ class Integration extends \WC_Integration {
 		}
 
 		return $this->api;
+	}
+
+
+	/**
+	 * Forget the API object, so the next one is built with current settings.
+	 *
+	 * It reads the keys once, in its constructor. Anything that changes them -
+	 * the setup wizard does - has to say so.
+	 *
+	 * @return void
+	 */
+	public function reload_api() {
+
+		$this->api = null;
 	}
 
 
