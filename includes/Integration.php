@@ -452,9 +452,12 @@ class Integration extends \WC_Integration {
 			return null;
 		}
 
+		// get_var()'s second argument is a column index, not an output format:
+		// ARRAY_A was taken as one, matched no column, and this method answered
+		// null for every product - so every invoice line went to Merit with the
+		// default unit of measure instead of the product's own.
 		$product_uom = $wpdb->get_var(
-			$wpdb->prepare( "SELECT uom_name FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE sku = %s LIMIT 1", $product_sku ),
-			ARRAY_A
+			$wpdb->prepare( "SELECT uom_name FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE sku = %s LIMIT 1", $product_sku )
 		);
 
 		return $product_uom;
@@ -900,14 +903,19 @@ class Integration extends \WC_Integration {
 
 				$this->get_plugin()->log( sprintf( 'Updating products source data in warehouse %s (%s)', $warehouse['title'], $warehouse['id'] ) );
 
-				$wpdb->query( 'START TRANSACTION' );
-
-				// Clear data
-				$wpdb->query(
-					$wpdb->prepare( "DELETE FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d", $warehouse['id'] )
-				);
-
+				// Ask before clearing. The old order emptied the table first,
+				// so an API call that failed - a timeout, an expired key, Merit
+				// being down - left the warehouse with no stock data at all,
+				// and every product then asked the same failing API one at a
+				// time. Stale numbers are worth more than none.
 				$api_products = $this->get_api()->get_products_in_warehouse( $warehouse['id'] );
+
+				if ( empty( $api_products ) ) {
+					$this->get_plugin()->log( sprintf( 'Merit returned no products for warehouse %s (%s); keeping what is already stored.', $warehouse['title'], $warehouse['id'] ) );
+
+					continue;
+				}
+
 				$cleaned_data = [];
 
 				$this->get_plugin()->log( sprintf( 'Cleaning up products data in %s (%s)', $warehouse['title'], $warehouse['id'] ) );
@@ -938,12 +946,19 @@ class Integration extends \WC_Integration {
 				if ( ! empty( $cleaned_data ) ) {
 					$updated = true;
 
+					$wpdb->query( 'START TRANSACTION' );
+
+					// Clear data
+					$wpdb->query(
+						$wpdb->prepare( "DELETE FROM {$wpdb->prefix}wc_merit_aktiva_product_lookup WHERE location_code = %d", $warehouse['id'] )
+					);
+
 					foreach ( $cleaned_data as $product_sku => $data ) {
 						$this->add_product_to_lookup_table( $data );
 					}
-				}
 
-				$wpdb->query( 'COMMIT' );
+					$wpdb->query( 'COMMIT' );
+				}
 
 				$this->get_plugin()->log( sprintf( 'Settings products cache for warehouse %s (%s). Total of products %d.', $warehouse['title'], $warehouse['id'], count( $cleaned_data ) ) );
 			}
@@ -978,7 +993,11 @@ class Integration extends \WC_Integration {
 
 	public function get_warehouses( $translate = true ) {
 
-		$warehouses = explode( "\n", $this->get_option( 'warehouses', [] ) );
+		// One warehouse per line, as typed into the settings. The default has
+		// to be a string: with nothing saved yet it is what explode() is
+		// handed, and PHP 8 stopped accepting an array there - which is why
+		// activating the plugin on a fresh site fataled.
+		$warehouses = explode( "\n", (string) $this->get_option( 'warehouses', '' ) );
 
 		if ( ! empty( $warehouses ) ) {
 			$warehouses = array_map( 'trim', $warehouses );

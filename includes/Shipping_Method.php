@@ -13,6 +13,17 @@ defined( 'ABSPATH' ) or exit;
 class Shipping_Method extends \WC_Shipping_Method {
 
 
+	/**
+	 * Which Merit warehouse this method collects from.
+	 *
+	 * Declared rather than assigned into existence: WC_Shipping_Method knows
+	 * nothing about warehouses, and PHP 8.2 deprecated dynamic properties.
+	 *
+	 * @var string
+	 */
+	public $warehouse = '';
+
+
 	public function __construct( $instance_id = 0 ) {
 		$this->id                 = Plugin::SHIPPING_METHOD_ID;
 		$this->instance_id        = absint( $instance_id );

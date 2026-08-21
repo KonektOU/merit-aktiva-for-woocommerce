@@ -120,14 +120,22 @@ class API extends Framework\SV_WC_API_Base {
 		/** @var \WC_Order_Item_Product $order_item */
 		foreach ( $order_line_items as $order_item ) {
 
+			// A refund of an amount rather than of goods carries no quantity at
+			// all, and dividing the line total by it was a fatal on PHP 8
+			// (DivisionByZeroError) rather than the notice it used to be. Such
+			// a line is one of something: the amount is the point of it, and a
+			// quantity of zero would send Merit a credit note worth nothing.
+			$quantity = (float) $order_item->get_quantity();
+			$quantity = 0.0 === $quantity ? 1.0 : $quantity;
+
 			$order_row = [
 				'Item' => [
 					'Code'        => '',
 					'Description' => $order_item->get_name(),
 					'Type'        => self::ITEM_TYPE_ITEM,
 				],
-				'Quantity' => $this->format_number( $order_item->get_quantity() ),
-				'Price'    => round( ( $order_item->get_total( 'edit' ) ) / $order_item->get_quantity(), 7 ),
+				'Quantity' => $this->format_number( $quantity ),
+				'Price'    => round( ( $order_item->get_total( 'edit' ) ) / $quantity, 7 ),
 			];
 
 			$item_taxes = $order_item->get_taxes();
@@ -209,14 +217,18 @@ class API extends Framework\SV_WC_API_Base {
 					$order_row['Item']['DefLocationCode'] = $this->integration->get_option( 'primary_warehouse_id', '1' );
 				}
 
-				// Check for discounts
-				if ( $order_item->get_subtotal( 'edit' ) != $order_item->get_total( 'edit' ) ) {
-					$discount_amount = $order_item->get_subtotal( 'edit' ) - $order_item->get_total( 'edit' );
+				// Check for discounts. A line whose subtotal is zero cannot
+				// have been discounted by a percentage of it, and asking for
+				// one is a division by zero.
+				$subtotal = (float) $order_item->get_subtotal( 'edit' );
 
-					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $order_item->get_subtotal( 'edit' ) * 100 );
-					$order_row['Price']           = round( ( $order_item->get_subtotal( 'edit' ) ) / $order_item->get_quantity(), 7 ); // no VAT, no discount
+				if ( $subtotal != (float) $order_item->get_total( 'edit' ) && 0.0 !== $subtotal ) {
+					$discount_amount = $subtotal - (float) $order_item->get_total( 'edit' );
+
+					$order_row['DiscountPct']     = $this->format_number( $discount_amount / $subtotal * 100 );
+					$order_row['Price']           = round( $subtotal / $quantity, 7 ); // no VAT, no discount
 					$order_row['DiscountAmount']  = $this->format_number( $discount_amount );
-					$order_row['DiscountedPrice'] = $this->format_number( $order_item->get_subtotal( 'edit' ) - $order_row['DiscountAmount'] );
+					$order_row['DiscountedPrice'] = $this->format_number( $subtotal - $order_row['DiscountAmount'] );
 				}
 
 				$product_uom = $this->integration->get_product_uom_from_lookup_table( $product->get_sku() );

@@ -14,6 +14,17 @@ class Product_Variation extends \WC_Product_Variation_Data_Store_CPT implements 
 
 
 	/**
+	 * The store this one defers to for everything Merit knows.
+	 *
+	 * Declared rather than assigned into existence: PHP 8.2 deprecated dynamic
+	 * properties, and 8.4 still warns on every product read.
+	 *
+	 * @var \Konekt\WooCommerce\Merit_Aktiva\Product_Data_Store
+	 */
+	protected $base;
+
+
+	/**
 	 * Construct
 	 *
 	 * @param \Konekt\WooCommerce\Merit_Aktiva\Product_Data_Store $base_store
