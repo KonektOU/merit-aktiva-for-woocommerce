@@ -67,21 +67,44 @@ class Request extends Framework\SV_WC_API_JSON_Request {
 	public function get_params() {
 		$params = $this->params;
 
+		// One timestamp, used both in the request and in what is signed. They
+		// used to be two separate date() calls, so a request that happened to
+		// straddle a second was signed for a moment other than the one it
+		// claimed - and Merit answered api-invalidSignature, intermittently and
+		// for no reason anybody could see.
+		$timestamp = gmdate( 'YmdHis' );
+
 		$params['ApiId']     = $this->api_id;
-		$params['timestamp'] = date( 'YmdHis' );
-		$params['signature'] = $this->create_signature( $this->get_data() );
+		$params['timestamp'] = $timestamp;
+		$params['signature'] = $this->create_signature( $timestamp );
 
 		return $params;
 	}
 
 
-	protected function create_signature( $data ) {
+	/**
+	 * Sign the request, the way Merit asks for it.
+	 *
+	 *   dataToSign := utf8_to_bytes( string_concat( apiId, timestamp, httpBody ) )
+	 *   signature  := base64( hmac_sha256( apiKey, dataToSign ) )
+	 *
+	 * with the timestamp as yyyyMMddHHmmss in UTC - hence gmdate() rather than
+	 * date(), which answers in whatever timezone PHP has been left in.
+	 *
+	 * The body signed is the one this request will actually send, taken from
+	 * the same method the framework sends it with. It used to be built here
+	 * separately, and for a request with no payload the two disagreed: an empty
+	 * payload is sent as an empty body but was signed as "[]", so every call
+	 * without data - gettaxes and getbanks among them - was signed wrongly.
+	 *
+	 * @param string $timestamp Timestamp being sent with the request.
+	 *
+	 * @return string
+	 */
+	protected function create_signature( $timestamp ) {
+		$signable = $this->api_id . $timestamp . $this->to_string();
 
-		$signable      = $this->api_id . date( 'YmdHis' ) . wp_json_encode( $data );
-		$raw_signature = hash_hmac( 'sha256', $signable, $this->api_key, true );
-		$signature     = base64_encode( $raw_signature );
-
-		return $signature;
+		return base64_encode( hash_hmac( 'sha256', $signable, $this->api_key, true ) );
 	}
 
 
