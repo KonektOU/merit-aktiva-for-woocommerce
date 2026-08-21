@@ -55,6 +55,8 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 	public function render_connect_step() {
 		$integration = $this->get_integration();
 
+		$this->render_styles();
+
 		?>
 		<p>
 			<?php
@@ -178,6 +180,8 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 	public function render_sync_step() {
 		$integration = $this->get_integration();
 
+		$this->render_styles();
+
 		?>
 		<p><?php esc_html_e( 'Each of these can be changed later, and each can be left off.', 'konekt-merit-aktiva' ); ?></p>
 		<?php
@@ -280,6 +284,46 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		);
 
 		return $steps;
+	}
+
+
+	/**
+	 * A few lines of CSS the wizard needs and the framework does not have.
+	 *
+	 * Its stylesheet makes every label inline-block, which is right for the
+	 * toggles - label on the left, description beside it - and wrong for a
+	 * select, which ends up sitting on the same line as its own label. Printed
+	 * once, on the steps that have fields.
+	 *
+	 * @return void
+	 */
+	private function render_styles() {
+		static $printed = false;
+
+		if ( $printed ) {
+			return;
+		}
+
+		$printed = true;
+
+		?>
+		<style>
+			.sv-wc-plugin-admin-setup-control:not(.toggle) label {
+				display: block;
+				margin-bottom: .25em;
+			}
+
+			.sv-wc-plugin-admin-setup-control .woocommerce-input-wrapper {
+				display: block;
+				width: 100%;
+			}
+
+			.sv-wc-plugin-admin-setup-control:not(.toggle) .required {
+				color: #b32d2e;
+				text-decoration: none;
+			}
+		</style>
+		<?php
 	}
 
 
