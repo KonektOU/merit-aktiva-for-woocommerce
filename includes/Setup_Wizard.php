@@ -185,9 +185,9 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		$this->render_form_field(
 			'invoice_sync_allowed',
 			array(
-				'label'       => __( 'Send invoices to Merit Aktiva', 'konekt-merit-aktiva' ),
+				'label'       => __( 'Invoices', 'konekt-merit-aktiva' ),
 				'type'        => 'toggle',
-				'description' => __( 'An invoice is created in Merit when an order reaches the status chosen below.', 'konekt-merit-aktiva' ),
+				'description' => __( 'Send invoices to Merit Aktiva. One is created when an order reaches the status chosen below.', 'konekt-merit-aktiva' ),
 			),
 			'yes' === $integration->get_option( 'invoice_sync_allowed', 'no' )
 		);
@@ -201,9 +201,13 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		$this->render_form_field(
 			'invoice_sync_status',
 			array(
-				'label'   => __( 'Invoice on order status', 'konekt-merit-aktiva' ),
-				'type'    => 'select',
-				'options' => $statuses,
+				'label'    => __( 'Invoice on order status', 'konekt-merit-aktiva' ),
+				'type'     => 'select',
+				'options'  => $statuses,
+				// Required, or woocommerce_form_field() writes "(optional)"
+				// after the label - and it is not optional: an order status is
+				// always chosen, this one merely has a sensible default.
+				'required' => true,
 			),
 			$integration->get_option( 'invoice_sync_status', 'processing' )
 		);
@@ -211,9 +215,9 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		$this->render_form_field(
 			'stock_sync_allowed',
 			array(
-				'label'       => __( 'Take stock levels from Merit Aktiva', 'konekt-merit-aktiva' ),
+				'label'       => __( 'Stock levels', 'konekt-merit-aktiva' ),
 				'type'        => 'toggle',
-				'description' => __( 'Products are matched by SKU. Warehouses are chosen on the settings screen, once Merit has told us which ones exist.', 'konekt-merit-aktiva' ),
+				'description' => __( 'Take stock levels from Merit Aktiva, matching products by SKU. Which warehouses to count is chosen on the settings screen.', 'konekt-merit-aktiva' ),
 			),
 			'yes' === $integration->get_option( 'stock_sync_allowed', 'no' )
 		);
@@ -221,9 +225,9 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		$this->render_form_field(
 			'product_sync_allowed',
 			array(
-				'label'       => __( 'Take product data from Merit Aktiva', 'konekt-merit-aktiva' ),
+				'label'       => __( 'Product data', 'konekt-merit-aktiva' ),
 				'type'        => 'toggle',
-				'description' => __( 'Names and prices follow Merit rather than WooCommerce.', 'konekt-merit-aktiva' ),
+				'description' => __( 'Take product data from Merit Aktiva: names and prices follow Merit rather than WooCommerce.', 'konekt-merit-aktiva' ),
 			),
 			'yes' === $integration->get_option( 'product_sync_allowed', 'no' )
 		);
@@ -276,6 +280,29 @@ class Setup_Wizard extends Framework\Admin\Setup_Wizard {
 		);
 
 		return $steps;
+	}
+
+
+	/**
+	 * The buttons under the next steps.
+	 *
+	 * The framework offers "Review Your Settings" here, which is where the
+	 * step above already sends people - two buttons, one destination, one of
+	 * them explaining itself and the other not. Only the explained one stays.
+	 *
+	 * @return array
+	 */
+	protected function get_additional_actions() {
+		$actions  = parent::get_additional_actions();
+		$settings = $this->get_plugin()->get_settings_url();
+
+		foreach ( $actions as $label => $url ) {
+			if ( $url === $settings ) {
+				unset( $actions[ $label ] );
+			}
+		}
+
+		return $actions;
 	}
 
 

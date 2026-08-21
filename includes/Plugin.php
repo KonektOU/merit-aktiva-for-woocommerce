@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.5.1';
+	const VERSION = '1.5.2';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -490,7 +490,11 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 */
 	public function get_documentation_url() {
 
-		return 'https://konekt.ee/woocommerce/merit-aktiva';
+		// Nothing to point at: that address answers 404, and the framework puts
+		// this behind a "Docs" link on the Plugins screen and a card at the end
+		// of the setup wizard. A link to nowhere is worse than no link. Give it
+		// a real page and both come back by themselves.
+		return null;
 	}
 
 
