@@ -213,6 +213,30 @@ msgstr "Ladu"
 msgid "Submit order to Merit Aktiva"
 msgstr ""
 
+#: includes/Integration.php
+msgid "Merit Aktiva could not be reached: %s"
+msgstr "Meritiga ei õnnestunud ühendust saada: %s"
+
+#: includes/Integration.php
+msgid "Merit Aktiva refused the request (HTTP %1$d): %2$s"
+msgstr "Merit Aktiva keeldus päringust (HTTP %1$d): %2$s"
+
+#: includes/Integration.php
+msgid "The Merit Aktiva account needs a PRO or Premium licence before the API can be used at all. Until it has one, no stock or invoice will be exchanged, however correct the keys are."
+msgstr "Merit Aktiva kontol peab API kasutamiseks olema PRO või Premium litsents. Enne seda ei vahetata ühtegi laoseisu ega arvet, ükskõik kui õiged võtmed on."
+
+#: includes/Integration.php
+msgid "Check the API ID and API key on the settings screen, and that they belong to this Merit Aktiva account."
+msgstr "Kontrolli seadete lehel API ID-d ja API võtit ning seda, et need kuuluvad sellele Merit Aktiva kontole."
+
+#: includes/Integration.php
+msgid "This is usually a network problem or Merit Aktiva being down; it is worth trying again shortly."
+msgstr "Tavaliselt on see võrguprobleem või on Merit Aktiva maas; tasub veidi hiljem uuesti proovida."
+
+#: includes/Integration.php
+msgid "Open the Merit Aktiva settings"
+msgstr "Ava Merit Aktiva seaded"
+
 #. Plugin Name of the plugin/theme
 #: includes/Plugin.php:429
 msgid "Merit Aktiva for WooCommerce"

@@ -84,6 +84,48 @@ class API extends Framework\SV_WC_API_Base {
 
 
 	/**
+	 * Make a request, and remember how it went.
+	 *
+	 * Every call to Merit used to fail in silence. A wrong key, an expired
+	 * one, an account without an API licence, Merit itself being down - all of
+	 * them ended as a null somewhere up the call stack, so stock stopped
+	 * updating and invoices stopped being created with nothing said to anybody.
+	 * The framework throws on a connection failure, too, which nothing here was
+	 * catching.
+	 *
+	 * So: one place that knows whether Merit answered, and a message a shop can
+	 * act on when it did not.
+	 *
+	 * @param \Konekt\WooCommerce\Merit_Aktiva\API\Request $request Request.
+	 *
+	 * @return object|null Parsed response, or null when Merit could not be reached.
+	 */
+	protected function perform_request( $request ) {
+
+		try {
+			$response = parent::perform_request( $request );
+		} catch ( Framework\SV_WC_Plugin_Exception $e ) {
+			// No answer at all: a timeout, DNS, a refused connection.
+			$this->integration->record_api_failure( 0, $e->getMessage(), $request->get_path() );
+
+			return null;
+		}
+
+		$code = (int) $this->get_response_code();
+
+		if ( $code >= 200 && $code < 300 ) {
+			$this->integration->clear_api_failure();
+
+			return $response;
+		}
+
+		$this->integration->record_api_failure( $code, $this->get_raw_response_body(), $request->get_path() );
+
+		return $response;
+	}
+
+
+	/**
 	 * Create invoice
 	 *
 	 * @param \WC_Order $order

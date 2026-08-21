@@ -49,6 +49,7 @@ class Integration extends \WC_Integration {
 		add_action( 'woocommerce_update_options_integration_' . $this->id, [ $this, 'process_admin_options' ] );
 		add_action( 'init', array( $this, 'init' ) );
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
+		add_action( 'admin_notices', array( $this, 'api_failure_notice' ) );
 
 		if ( $this->have_api_credentials() ) {
 			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
@@ -337,6 +338,34 @@ class Integration extends \WC_Integration {
 
 		// Add shipping method
 		add_filter( 'woocommerce_shipping_methods', array( $this, 'load_shipping_method' ) );
+	}
+
+
+	/**
+	 * Say plainly, in the admin, that Merit is not answering.
+	 *
+	 * Not dismissible on purpose: while this is showing, nothing at all is
+	 * being exchanged with Merit. It goes away by itself the moment a request
+	 * succeeds - and opening the settings screen is enough to try one.
+	 *
+	 * @return void
+	 */
+	public function api_failure_notice() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			return;
+		}
+
+		$failure = $this->get_api_failure();
+
+		if ( ! $failure ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-error"><p><strong>%s</strong> %s</p></div>',
+			esc_html( $this->get_plugin()->get_plugin_name() . ':' ),
+			wp_kses_post( $this->api_failure_message( $failure ) )
+		);
 	}
 
 
@@ -1050,6 +1079,124 @@ class Integration extends \WC_Integration {
 	 *
 	 * @return \Konekt\WooCommerce\Merit_Aktiva\API
 	 */
+	/**
+	 * Where the last failed conversation with Merit is kept.
+	 */
+	const API_FAILURE_OPTION = 'api_failure';
+
+	/**
+	 * Remember that Merit refused, or never answered, and say so in the admin.
+	 *
+	 * @param integer $code    HTTP status, or 0 when there was no answer at all.
+	 * @param string  $message What Merit said, verbatim where it said anything.
+	 * @param string  $path    Endpoint that was asked.
+	 *
+	 * @return void
+	 */
+	public function record_api_failure( $code, $message, $path = '' ) {
+		$message = trim( wp_strip_all_tags( (string) $message ) );
+
+		// Merit answers a refusal with a line of prose, but an endpoint that is
+		// merely unhappy can answer with a page; keep it to something readable.
+		if ( mb_strlen( $message ) > 300 ) {
+			$message = mb_substr( $message, 0, 300 ) . '…';
+		}
+
+		$failure = [
+			'code'    => (int) $code,
+			'message' => $message,
+			'path'    => (string) $path,
+			'time'    => time(),
+		];
+
+		$known = $this->get_api_failure();
+
+		// A cron run can fail the same way a hundred times over; the option is
+		// only rewritten when there is something new to say.
+		if ( $known && $known['code'] === $failure['code'] && $known['message'] === $failure['message'] ) {
+			return;
+		}
+
+		$this->get_plugin()->update_option( self::API_FAILURE_OPTION, $failure );
+
+		$this->get_plugin()->log( sprintf( 'API request to %s failed (%d): %s', $path, $code, $message ) );
+	}
+
+
+	/**
+	 * Merit answered, so whatever was wrong is no longer wrong.
+	 *
+	 * @return void
+	 */
+	public function clear_api_failure() {
+		if ( ! $this->get_api_failure() ) {
+			return;
+		}
+
+		$this->get_plugin()->update_option( self::API_FAILURE_OPTION, '' );
+	}
+
+
+	/**
+	 * What to tell the shop about a failed conversation with Merit.
+	 *
+	 * Merit's own words come first and unedited - they are the authoritative
+	 * answer, and often the whole explanation - followed by what can be done
+	 * about the kind of failure it is.
+	 *
+	 * @param array $failure As stored by record_api_failure().
+	 *
+	 * @return string
+	 */
+	public function api_failure_message( $failure ) {
+		$code    = (int) ( $failure['code'] ?? 0 );
+		$message = (string) ( $failure['message'] ?? '' );
+
+		if ( 0 === $code ) {
+			/* translators: %s: error message from the HTTP request. */
+			$lines = [ sprintf( __( 'Merit Aktiva could not be reached: %s', 'konekt-merit-aktiva' ), $message ) ];
+		} else {
+			$lines = [
+				sprintf(
+					/* translators: 1: HTTP status code, 2: message from Merit Aktiva. */
+					__( 'Merit Aktiva refused the request (HTTP %1$d): %2$s', 'konekt-merit-aktiva' ),
+					$code,
+					$message
+				),
+			];
+		}
+
+		// Merit says this in the shop's own language, so match on both.
+		if ( preg_match( '/litsents|licen[cs]/iu', $message ) ) {
+			$lines[] = __( 'The Merit Aktiva account needs a PRO or Premium licence before the API can be used at all. Until it has one, no stock or invoice will be exchanged, however correct the keys are.', 'konekt-merit-aktiva' );
+		} elseif ( in_array( $code, [ 401, 403 ], true ) ) {
+			$lines[] = __( 'Check the API ID and API key on the settings screen, and that they belong to this Merit Aktiva account.', 'konekt-merit-aktiva' );
+		} elseif ( 0 === $code ) {
+			$lines[] = __( 'This is usually a network problem or Merit Aktiva being down; it is worth trying again shortly.', 'konekt-merit-aktiva' );
+		}
+
+		$lines[] = sprintf(
+			'<a href="%s">%s</a>',
+			esc_url( $this->get_plugin()->get_settings_url() ),
+			esc_html__( 'Open the Merit Aktiva settings', 'konekt-merit-aktiva' )
+		);
+
+		return implode( ' ', $lines );
+	}
+
+
+	/**
+	 * The last failure, for a screen that wants to show it itself.
+	 *
+	 * @return array|null
+	 */
+	public function get_api_failure() {
+		$failure = $this->get_plugin()->get_option( self::API_FAILURE_OPTION );
+
+		return is_array( $failure ) && ! empty( $failure['time'] ) ? $failure : null;
+	}
+
+
 	public function get_api() {
 
 		if ( null === $this->api ) {
