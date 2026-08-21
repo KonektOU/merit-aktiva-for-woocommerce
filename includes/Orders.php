@@ -43,19 +43,31 @@ class Orders {
 			// Show order item warehouse location
 			add_action( 'woocommerce_after_order_itemmeta', array( $this, 'show_warehouse_name' ), 10, 2 );
 
-			// Add order ID column
+			// Add order ID column. Both order screens: the one built on posts,
+			// and the one HPOS replaced it with - a shop can be on either, and
+			// switching between them is a WooCommerce setting.
 			add_filter( 'manage_edit-shop_order_columns', array( $this, 'add_order_listing_columns' ) );
 			add_filter( 'manage_shop_order_posts_custom_column', array( $this, 'show_order_listing_column' ), 10, 1 );
 
+			add_filter( 'woocommerce_shop_order_list_table_columns', array( $this, 'add_order_listing_columns' ) );
+			add_action( 'woocommerce_shop_order_list_table_custom_column', array( $this, 'show_order_listing_column' ), 10, 2 );
+
 			// Allow filtering orders with/without order ID
-			add_action( 'restrict_manage_posts', array( $this, 'filter_orders_by_external_order_id') , 20 );
+			add_action( 'restrict_manage_posts', array( $this, 'filter_orders_by_external_order_id' ), 20 );
 			add_filter( 'request', array( $this, 'filter_orders_by_external_order_id_query' ) );
 			add_filter( 'request', array( $this, 'filter_orders_by_warehouse_id_query' ) );
+
+			add_action( 'woocommerce_order_list_table_restrict_manage_orders', array( $this, 'filter_orders_by_external_order_id' ), 20, 2 );
+			add_filter( 'woocommerce_order_list_table_prepare_items_query_args', array( $this, 'filter_orders_query_args' ) );
 
 			// Validate products in cart
 			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products_quantity' ), 10, 3 );
 
-			// Add custom order var
+			// Add custom order var. Translated before the query reaches a data
+			// store, so it works whichever store is holding the orders; the
+			// filter below it is the one the posts store used to answer, kept
+			// for anything asking that store directly.
+			add_filter( 'woocommerce_order_query_args', array( $this, 'translate_custom_order_query_vars' ) );
 			add_filter( 'woocommerce_order_data_store_cpt_get_orders_query', array( $this, 'add_custom_order_query_var' ), 10, 2 );
 		}
 	}
@@ -325,16 +337,30 @@ class Orders {
 	}
 
 
-	public function show_order_listing_column( $column ) {
+	/**
+	 * @param string             $column Column being rendered.
+	 * @param \WC_Order|null     $order  The order, on the HPOS screen. The posts
+	 *                                   screen passes nothing and leaves it in
+	 *                                   the global $post.
+	 *
+	 * @return void
+	 */
+	public function show_order_listing_column( $column, $order = null ) {
 		global $post;
 
-		if ( $this->integration->id == $column ) {
-			$order = \wc_get_order( $post->ID );
+		if ( ! $order instanceof \WC_Order ) {
+			$order = ( $post instanceof \WP_Post ) ? \wc_get_order( $post->ID ) : null;
+		}
 
-			echo $this->get_plugin()->get_order_meta( $order, 'invoice_id' );
+		if ( ! $order ) {
+			return;
+		}
+
+		if ( $this->integration->id == $column ) {
+			echo esc_html( (string) $this->get_plugin()->get_order_meta( $order, 'invoice_id' ) );
 		}
 		elseif ( $this->integration->id . '_warehouse' == $column ) {
-			$wc_order  = \wc_get_order( $post->ID );
+			$wc_order  = $order;
 			$api_order = $this->get_api_order( $wc_order );
 
 			if ( $api_order ) {
@@ -347,7 +373,7 @@ class Orders {
 				$warehouses = array_filter( $warehouses );
 				$warehouses = array_unique( $warehouses );
 
-				echo implode( ', ', $warehouses );
+				echo esc_html( implode( ', ', $warehouses ) );
 			}
 		}
 	}
@@ -380,10 +406,23 @@ class Orders {
 	}
 
 
-	public function filter_orders_by_external_order_id() {
+	/**
+	 * @param string $order_type Order type, on the HPOS screen. The posts screen
+	 *                           passes the post type it is filtering instead.
+	 * @param string $which      Which end of the table the controls are being
+	 *                           rendered at, on the HPOS screen.
+	 *
+	 * @return void
+	 */
+	public function filter_orders_by_external_order_id( $order_type = '', $which = 'top' ) {
 		global $typenow;
 
-		if ( 'shop_order' === $typenow ) {
+		// The posts screen calls this with the post type it is showing and
+		// leaves the same value in $typenow; the HPOS screen has no $typenow
+		// and calls it once for each end of the table.
+		$is_order_screen = 'shop_order' === $typenow || 'shop_order' === $order_type;
+
+		if ( $is_order_screen && 'top' === $which ) {
 			$action_name = $this->integration->id . '_order_id_filter';
 			?>
 			<select name="<?php echo esc_attr( $action_name ); ?>" id="dropdown_<?php echo esc_attr( $action_name ); ?>">
@@ -413,10 +452,22 @@ class Orders {
 	public function get_orders_warehouses() {
 		global $wpdb;
 
-		$warehouses_ids = $wpdb->get_col( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s", $this->get_plugin()->get_meta_key( 'warehouse_id' ) ) );
-		$warehouses_ids = array_unique( $warehouses_ids );
+		// Order meta is in wp_postmeta or in wp_wc_orders_meta depending on
+		// which store the shop is on; WooCommerce will say which. Both tables
+		// name the columns the same way.
+		$table = class_exists( \Automattic\WooCommerce\Utilities\OrderUtil::class )
+			? \Automattic\WooCommerce\Utilities\OrderUtil::get_table_for_order_meta()
+			: $wpdb->postmeta;
 
-		return $warehouses_ids;
+		$warehouses_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from WooCommerce.
+				"SELECT DISTINCT meta_value FROM {$table} WHERE meta_key = %s",
+				$this->get_plugin()->get_meta_key( 'warehouse_id' )
+			)
+		);
+
+		return array_unique( array_filter( (array) $warehouses_ids ) );
 	}
 
 
@@ -459,6 +510,104 @@ class Orders {
 		}
 
 		return $vars;
+	}
+
+
+	/**
+	 * Apply the two dropdowns to the HPOS orders list.
+	 *
+	 * The posts screen does this by adding meta_key/meta_value to the request;
+	 * the HPOS list table builds its own query args and hands them here.
+	 *
+	 * @param array $args Query args the list table is about to run.
+	 *
+	 * @return array
+	 */
+	public function filter_orders_query_args( $args ) {
+
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- reading a filter the admin chose.
+		$invoice_filter   = $this->integration->id . '_order_id_filter';
+		$warehouse_filter = $this->integration->id . '_warehouse_filter';
+
+		if ( isset( $_GET[ $invoice_filter ] ) && is_numeric( $_GET[ $invoice_filter ] ) ) {
+			$args['meta_query'] = $args['meta_query'] ?? [];
+
+			$args['meta_query'][] = 1 === (int) $_GET[ $invoice_filter ]
+				? [
+					'key'     => $this->get_plugin()->get_meta_key( 'invoice_id' ),
+					'value'   => '',
+					'compare' => '!=',
+				]
+				: [
+					'key'     => $this->get_plugin()->get_meta_key( 'invoice_id' ),
+					'compare' => 'NOT EXISTS',
+				];
+		}
+
+		if ( ! empty( $_GET[ $warehouse_filter ] ) && is_numeric( $_GET[ $warehouse_filter ] ) ) {
+			$args['meta_query'] = $args['meta_query'] ?? [];
+
+			$args['meta_query'][] = [
+				'key'     => $this->get_plugin()->get_meta_key( 'warehouse_id' ),
+				'value'   => sanitize_text_field( wp_unslash( $_GET[ $warehouse_filter ] ) ),
+				'compare' => '=',
+			];
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		return $args;
+	}
+
+
+	/**
+	 * Turn this plugin's own order query vars into meta queries.
+	 *
+	 * wc_get_orders( [ 'merit_aktiva_invoice_id' => 'any' ] ) used to be
+	 * answered by a filter on the posts data store, so under HPOS the var was
+	 * ignored and the query came back with every order in the shop. Doing it
+	 * here, before the query reaches a store, works on both.
+	 *
+	 * @param array $args Query args.
+	 *
+	 * @return array
+	 */
+	public function translate_custom_order_query_vars( $args ) {
+
+		foreach ( [ 'invoice_id', 'warehouse_id' ] as $key ) {
+			$var = 'merit_aktiva_' . $key;
+
+			if ( ! isset( $args[ $var ] ) ) {
+				continue;
+			}
+
+			$value    = $args[ $var ];
+			$meta_key = $this->get_plugin()->get_meta_key( $key );
+
+			unset( $args[ $var ] );
+
+			$args['meta_query'] = $args['meta_query'] ?? [];
+
+			if ( '' === $value ) {
+				$args['meta_query'][] = [
+					'key'     => $meta_key,
+					'compare' => 'NOT EXISTS',
+				];
+			} elseif ( 'any' === $value ) {
+				$args['meta_query'][] = [
+					'key'     => $meta_key,
+					'value'   => '',
+					'compare' => '!=',
+				];
+			} else {
+				$args['meta_query'][] = [
+					'key'     => $meta_key,
+					'value'   => $value,
+					'compare' => '=',
+				];
+			}
+		}
+
+		return $args;
 	}
 
 

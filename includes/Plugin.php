@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.2.0';
+	const VERSION = '1.3.0';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -65,7 +65,17 @@ class Plugin extends Framework\SV_WC_Plugin {
 			self::PLUGIN_ID,
 			self::VERSION,
 			array(
-				'text_domain' => 'konekt-merit-aktiva',
+				'text_domain'        => 'konekt-merit-aktiva',
+				'supported_features' => array(
+					// Orders are read and written through WC_Order, and both
+					// order screens are hooked, so WooCommerce can be told
+					// this plugin does not mind where orders are kept.
+					'hpos'   => true,
+					'blocks' => array(
+						'cart'     => false,
+						'checkout' => false,
+					),
+				),
 			)
 		);
 	}
