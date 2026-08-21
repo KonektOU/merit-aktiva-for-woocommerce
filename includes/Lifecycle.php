@@ -18,6 +18,7 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 		'1.0.34',
 		'1.0.36',
 		'1.1',
+		'1.1.1',
 	];
 
 	public function upgrade_to_1_0_34( $installed_version ) {
@@ -46,7 +47,58 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 		}
 	}
 
+	/**
+	 * A fresh install needs the lookup table too.
+	 *
+	 * It was created only by the upgrade to 1.0.36, so a site installing the
+	 * plugin for the first time never got one: every stock lookup then failed
+	 * against a table that was not there, and each product fell back to asking
+	 * the Merit API one at a time.
+	 *
+	 * @return void
+	 */
+	protected function install() {
+
+		$this->create_lookup_table();
+	}
+
+
 	public function upgrade_to_1_0_36( $installed_version ) {
+
+		$this->create_lookup_table();
+	}
+
+
+	/**
+	 * Every existing site needs the lookup table built as well.
+	 *
+	 * The statement that was supposed to create it in 1.0.36 was rejected by
+	 * MySQL - a primary key over nullable columns - so no site has ever had
+	 * one, upgraded or not. This runs the corrected statement everywhere.
+	 *
+	 * @param string $installed_version Version being upgraded from.
+	 *
+	 * @return void
+	 */
+	public function upgrade_to_1_1_1( $installed_version ) {
+
+		$this->create_lookup_table();
+	}
+
+
+	/**
+	 * The table stock and item data is kept in, per warehouse.
+	 *
+	 * dbDelta is safe to run against an existing table - it compares and only
+	 * applies what differs - so install and upgrade can share this.
+	 *
+	 * Both key columns are NOT NULL because they are the primary key, and MySQL
+	 * refuses a primary key over a nullable column: as written the CREATE
+	 * failed outright, which is the other half of why sites had no table.
+	 *
+	 * @return void
+	 */
+	protected function create_lookup_table() {
 		global $wpdb;
 
 		$collate = '';
@@ -59,11 +111,11 @@ class Lifecycle extends Framework\Plugin\Lifecycle {
 
 		$create_table = "
 			CREATE TABLE {$wpdb->prefix}wc_merit_aktiva_product_lookup (
-				`sku` varchar(100),
+				`sku` varchar(100) NOT NULL default '',
 				`item_id` varchar(100) NULL default NULL,
 				`stock_quantity` double NULL default NULL,
 				`product_type` varchar(100) NULL default NULL,
-				`location_code` bigint(20) NULL default 0,
+				`location_code` bigint(20) NOT NULL default 0,
 				`uom_name` varchar(100) NULL default NULL,
 				PRIMARY KEY  (`sku`, `location_code`),
 				KEY `location_code` (`location_code`),

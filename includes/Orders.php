@@ -133,7 +133,7 @@ class Orders {
 	 *
 	 * @return void
 	 */
-	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status ) {
+	public function maybe_create_invoice( $order_id, $order_old_status, $order_new_status, $force = false ) {
 
 		if ( 'yes' !== $this->integration->get_option( 'invoice_sync_allowed', 'no' ) ) {
 			return;
@@ -158,6 +158,19 @@ class Orders {
 
 		if ( 'processing' !== $order_old_status && 'completed' === $order_new_status && ! $invoice_id ) {
 			$create_invoice = true;
+		}
+
+		// An order that already has an invoice in Merit must not quietly get a
+		// second one. Only the first of the conditions above asks whether there
+		// is one, so an order moved back and forth between the sync status and
+		// anything else - processing, on-hold, processing - invoiced itself
+		// again each time, and the new invoice ID overwrote the old one, so
+		// even deleting the duplicate was no longer possible from here.
+		//
+		// Sending it again on purpose still works: the order action passes
+		// $force, and deleting the invoice clears the ID.
+		if ( $invoice_id && ! $force ) {
+			$create_invoice = false;
 		}
 
 		$create_invoice = apply_filters( 'wc_' . $this->get_plugin()->get_id() . '_create_invoice', $create_invoice, $order, $invoice_id );
@@ -283,8 +296,14 @@ class Orders {
 			$order = wc_get_order( $order );
 		}
 
-		// Submit manually
-		$this->maybe_create_invoice( $order->get_id(), $this->integration->get_option( 'invoice_sync_status', 'processing' ), $this->integration->get_option( 'invoice_sync_status', 'processing' ), $order );
+		// Submit manually. Forced, because this is somebody asking for it by
+		// hand on an order that may well have been invoiced already.
+		$this->maybe_create_invoice(
+			$order->get_id(),
+			$this->integration->get_option( 'invoice_sync_status', 'processing' ),
+			$this->integration->get_option( 'invoice_sync_status', 'processing' ),
+			true
+		);
 	}
 
 

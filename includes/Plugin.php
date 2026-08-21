@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.1';
+	const VERSION = '1.1.1';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -229,9 +229,12 @@ class Plugin extends Framework\SV_WC_Plugin {
 		foreach ( $this->get_integration()->get_warehouses() as $warehouse ) {
 			$warehouse_quantity = 0;
 
-			foreach ( $product_in_warehouses as $product ) {
-				if ( $product['location_code'] == $warehouse['id'] ) {
-					$warehouse_quantity = $product['stock_quantity'];
+			// Not $product: that is the product this was called about, and
+			// overwriting it here left the rest of the method holding a
+			// database row where it expected a WC_Product.
+			foreach ( $product_in_warehouses as $stored_row ) {
+				if ( $stored_row['location_code'] == $warehouse['id'] ) {
+					$warehouse_quantity = $stored_row['stock_quantity'];
 
 					break;
 				}
