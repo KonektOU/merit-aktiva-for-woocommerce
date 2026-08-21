@@ -78,6 +78,184 @@ class Integration extends \WC_Integration {
 	 *
 	 * @return void
 	 */
+	/**
+	 * The settings screen, in tabs.
+	 *
+	 * Six sections on one scroll is a lot to read past to reach the one being
+	 * changed, and the sections were already marked out - every "title" field
+	 * starts one. They are tabs now, with the section's own title as the label.
+	 *
+	 * Deliberately one form with everything in it, only one panel visible at a
+	 * time. WooCommerce saves an integration by walking every field it knows
+	 * and reading what was posted, and an unticked checkbox posts nothing at
+	 * all - so a form carrying only the open tab would quietly switch off
+	 * everything on the others.
+	 *
+	 * @return void
+	 */
+	public function admin_options() {
+		$groups = $this->get_settings_groups();
+
+		if ( count( $groups ) < 2 ) {
+			parent::admin_options();
+
+			return;
+		}
+
+		echo '<h2>' . esc_html( $this->get_method_title() ) . '</h2>';
+		echo wp_kses_post( wpautop( $this->get_method_description() ) );
+		echo '<div><input type="hidden" name="section" value="' . esc_attr( $this->id ) . '" /></div>';
+
+		$this->render_settings_tabs_assets();
+
+		$first = key( $groups );
+
+		echo '<h2 class="nav-tab-wrapper merit-aktiva-tabs">';
+
+		foreach ( $groups as $key => $group ) {
+			printf(
+				'<a href="#%1$s" class="nav-tab%2$s" data-merit-tab="%1$s">%3$s</a>',
+				esc_attr( $key ),
+				$key === $first ? ' nav-tab-active' : '',
+				esc_html( $group['title'] )
+			);
+		}
+
+		echo '</h2>';
+
+		foreach ( $groups as $key => $group ) {
+			printf(
+				'<div class="merit-aktiva-panel" id="%s"%s>',
+				esc_attr( $key ),
+				$key === $first ? '' : ' style="display:none"'
+			);
+
+			if ( ! empty( $group['description'] ) ) {
+				echo wp_kses_post( wpautop( $group['description'] ) );
+			}
+
+			echo '<table class="form-table">' . $this->generate_settings_html( $group['fields'], false ) . '</table>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WooCommerce builds this.
+
+			echo '</div>';
+		}
+	}
+
+
+	/**
+	 * The settings, split at every section heading.
+	 *
+	 * @return array group key => [ title, description, fields ].
+	 */
+	private function get_settings_groups() {
+		$groups  = [];
+		$current = null;
+
+		foreach ( $this->get_form_fields() as $key => $field ) {
+
+			// A heading starts a section, and becomes its tab. It is not
+			// rendered again inside the panel it names.
+			if ( isset( $field['type'] ) && 'title' === $field['type'] ) {
+				$current = $key;
+
+				$groups[ $current ] = [
+					'title'       => $field['title'] ?? $key,
+					'description' => $field['description'] ?? '',
+					'fields'      => [],
+				];
+
+				continue;
+			}
+
+			// Anything before the first heading belongs with what follows it.
+			if ( null === $current ) {
+				$current = 'general';
+
+				$groups[ $current ] = [
+					'title'       => __( 'General', 'konekt-merit-aktiva' ),
+					'description' => '',
+					'fields'      => [],
+				];
+			}
+
+			$groups[ $current ]['fields'][ $key ] = $field;
+		}
+
+		// A heading with nothing under it is not a tab.
+		return array_filter( $groups, function ( $group ) {
+			return ! empty( $group['fields'] );
+		} );
+	}
+
+
+	/**
+	 * What makes the tabs work. Small enough to keep here, and only printed on
+	 * the one screen that has them.
+	 *
+	 * @return void
+	 */
+	private function render_settings_tabs_assets() {
+		?>
+		<style>
+			.merit-aktiva-tabs { margin-bottom: 0; }
+			.merit-aktiva-panel > .form-table:first-of-type { margin-top: .5em; }
+			.merit-aktiva-panel h3.wc-settings-sub-title { margin-top: 1.5em; }
+		</style>
+		<script>
+			( function () {
+				var storageKey = 'meritAktivaSettingsTab';
+
+				function show( id, remember ) {
+					var tabs   = document.querySelectorAll( '.merit-aktiva-tabs .nav-tab' );
+					var panels = document.querySelectorAll( '.merit-aktiva-panel' );
+					var found  = false;
+
+					panels.forEach( function ( panel ) {
+						if ( panel.id === id ) { found = true; }
+					} );
+
+					if ( ! found ) { return; }
+
+					tabs.forEach( function ( tab ) {
+						tab.classList.toggle( 'nav-tab-active', tab.getAttribute( 'data-merit-tab' ) === id );
+					} );
+
+					panels.forEach( function ( panel ) {
+						panel.style.display = panel.id === id ? '' : 'none';
+					} );
+
+					if ( remember ) {
+						try { window.localStorage.setItem( storageKey, id ); } catch ( e ) {}
+					}
+				}
+
+				document.addEventListener( 'DOMContentLoaded', function () {
+					var tabs = document.querySelectorAll( '.merit-aktiva-tabs .nav-tab' );
+
+					if ( ! tabs.length ) { return; }
+
+					tabs.forEach( function ( tab ) {
+						tab.addEventListener( 'click', function ( event ) {
+							event.preventDefault();
+							show( tab.getAttribute( 'data-merit-tab' ), true );
+						} );
+					} );
+
+					// The tab asked for in the link, or the one last looked at -
+					// saving sends the browser back here without either.
+					var wanted = window.location.hash.replace( '#', '' );
+
+					if ( ! wanted ) {
+						try { wanted = window.localStorage.getItem( storageKey ) || ''; } catch ( e ) {}
+					}
+
+					if ( wanted ) { show( wanted, false ); }
+				} );
+			} )();
+		</script>
+		<?php
+	}
+
+
 	public function init_form_fields() {
 
 		$this->form_fields = [
@@ -1522,6 +1700,8 @@ class Integration extends \WC_Integration {
 					</thead>
 					<tbody>
 
+						<input type="hidden" name="<?php echo esc_attr( $field_key ); ?>_had_options" value="<?php echo empty( $payment_types ) ? '0' : '1'; ?>" />
+
 						<?php foreach ( WC()->payment_gateways()->payment_gateways() as $gateway_id => $gateway ) : ?>
 
 							<?php
@@ -1587,7 +1767,7 @@ class Integration extends \WC_Integration {
 	 */
 	public function validate_payment_methods_mapping_table_field( $key, $value ) {
 
-		return $this->validate_multiselect_field( $key, $value );
+		return $this->keep_mapping_if_unrenderable( $key, $value );
 	}
 
 
@@ -1630,6 +1810,15 @@ class Integration extends \WC_Integration {
 						</tr>
 					</thead>
 					<tbody>
+
+						<?php
+						// Whether this table could show the mapping at all. With
+						// Merit unreachable the selects have no options, a select
+						// with no options posts nothing, and saving the screen
+						// used to erase the mapping that was there.
+						$merit_taxes = $this->get_taxes();
+						?>
+						<input type="hidden" name="<?php echo esc_attr( $field_key ); ?>_had_options" value="<?php echo empty( $merit_taxes ) ? '0' : '1'; ?>" />
 
 						<?php foreach ( $this->get_all_tax_rates() as $wc_tax_id => $wc_tax ) : ?>
 
@@ -1693,6 +1882,38 @@ class Integration extends \WC_Integration {
 	 * @return string|array
 	 */
 	public function validate_tax_mapping_table_field( $key, $value ) {
+
+		return $this->keep_mapping_if_unrenderable( $key, $value );
+	}
+
+
+	/**
+	 * Do not let a table that had nothing to show erase what it was showing.
+	 *
+	 * Both mapping tables are filled from Merit. When Merit cannot be reached
+	 * their selects have no options - and a select with no options posts
+	 * nothing - so saving the settings screen while the API was down wiped the
+	 * mapping, silently, and every invoice after that went with the fallback
+	 * tax code. Each table says whether it could be rendered; when it could
+	 * not, what was saved stays saved.
+	 *
+	 * @param string $key   Field key.
+	 * @param mixed  $value Posted value.
+	 *
+	 * @return array|string
+	 */
+	private function keep_mapping_if_unrenderable( $key, $value ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WooCommerce checks the nonce before saving.
+		$had_options = isset( $_POST[ $this->get_field_key( $key ) . '_had_options' ] )
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- as above.
+			? '1' === (string) $_POST[ $this->get_field_key( $key ) . '_had_options' ]
+			: true;
+
+		if ( ! $had_options ) {
+			$saved = $this->get_option( $key, [] );
+
+			return is_array( $saved ) ? $saved : [];
+		}
 
 		return $this->validate_multiselect_field( $key, $value );
 	}
