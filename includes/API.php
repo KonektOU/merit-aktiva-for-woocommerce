@@ -43,6 +43,20 @@ class API extends Framework\SV_WC_API_Base {
 	/** @var \Konekt\WooCommerce\Merit_Aktiva\Integration the integration class instance */
 	private $integration;
 
+	/**
+	 * Merit API id, as issued to the shop.
+	 *
+	 * Declared here because the framework's API base knows nothing about it,
+	 * and PHP 8.2 deprecated properties assigned into existence - which this
+	 * one was, on every request made to Merit.
+	 *
+	 * @var string
+	 */
+	protected $api_id;
+
+	/** @var string Merit API key, as issued to the shop. */
+	protected $api_key;
+
 
 	/**
 	 * API constructor
@@ -53,9 +67,14 @@ class API extends Framework\SV_WC_API_Base {
 
 		$this->integration = $integration;
 
+		$localization = (string) $this->integration->get_option( 'api_localization' );
+
 		$this->api_id      = $this->integration->get_option( 'api_id' );
 		$this->api_key     = $this->integration->get_option( 'api_key' );
-		$this->request_uri = $this->api_urls[ $this->integration->get_option( 'api_localization' ) ];
+		// A shop that has not chosen one yet, or an option left over from a
+		// naming that no longer exists, used to index the list with a key that
+		// is not in it: a warning on PHP 7 and no request URI at all.
+		$this->request_uri = $this->api_urls[ $localization ] ?? $this->api_urls['estonian'];
 
 		$this->set_request_content_type_header( 'application/json' );
 		$this->set_request_accept_header( 'application/json' );
@@ -154,7 +173,10 @@ class API extends Framework\SV_WC_API_Base {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( '' );
 			}
 
-			if ( ( $order_item->get_total( 'edit' ) > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $order_item->get_total_tax() == 0 ) {
+			// 'edit' throughout: the stored figure is what an invoice is made
+			// of, and the view context puts it through display filters that a
+			// tax-display or currency plugin is entitled to change.
+			if ( ( $order_item->get_total( 'edit' ) > 0 || ( $refund && abs( $refund->get_total( 'edit' ) ) > 0 ) ) && $order_item->get_total_tax( 'edit' ) == 0 ) {
 				$order_row['TaxId'] = $this->integration->get_matching_tax_code( 0 );
 
 				if ( ! empty( $account_code = $this->integration->get_option( 'zero_tax_account_code', null ) ) ) {
@@ -162,7 +184,7 @@ class API extends Framework\SV_WC_API_Base {
 				}
 			}
 
-			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax() >= 0 ) {
+			if ( empty( $order_row['TaxId'] ) && $order_item->get_total_tax( 'edit' ) >= 0 ) {
 				$order_row['TaxId'] = $this->integration::DEFAULT_ESTONIAN_TAX_ID;
 			}
 

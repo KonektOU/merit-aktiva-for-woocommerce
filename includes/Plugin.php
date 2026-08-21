@@ -485,7 +485,12 @@ class Plugin extends Framework\SV_WC_Plugin {
 	 */
 	public function get_plugin_name() {
 
-		return __( 'Merit Aktiva for WooCommerce', 'konekt-merit-aktiva' );
+		// Not translated, deliberately. The framework asks for this while the
+		// plugin is still being constructed on plugins_loaded, and WordPress
+		// 6.7 logs "called incorrectly" for every translation requested before
+		// init - which this was, on every request the site served. It is a
+		// product name; the Estonian catalogue has never had a word for it.
+		return 'Merit Aktiva for WooCommerce';
 	}
 
 

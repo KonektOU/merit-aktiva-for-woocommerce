@@ -22,6 +22,21 @@ class Request extends Framework\SV_WC_API_JSON_Request {
 
 
 	/**
+	 * Merit API id, as issued to the shop.
+	 *
+	 * Declared rather than assigned into existence: the framework's request
+	 * base declares method, path, data and params, but knows nothing about
+	 * Merit's credentials, and PHP 8.2 deprecated dynamic properties.
+	 *
+	 * @var string
+	 */
+	protected $api_id;
+
+	/** @var string Merit API key, as issued to the shop. */
+	protected $api_key;
+
+
+	/**
 	 * Construct API request
 	 *
 	 * @param string $api_id
