@@ -60,8 +60,12 @@ class Orders {
 			add_action( 'woocommerce_order_list_table_restrict_manage_orders', array( $this, 'filter_orders_by_external_order_id' ), 20, 2 );
 			add_filter( 'woocommerce_order_list_table_prepare_items_query_args', array( $this, 'filter_orders_query_args' ) );
 
-			// Validate products in cart
+			// Validate products in cart, on both checkouts. The block checkout
+			// never fires the classic validation hook - it validates through
+			// the Store API - so a shop on the newer checkout was placing
+			// orders for stock Merit no longer had.
 			add_action( 'woocommerce_after_checkout_validation', array( $this, 'validate_cart_products_quantity' ), 10, 3 );
+			add_action( 'woocommerce_store_api_cart_errors', array( $this, 'validate_store_api_cart' ), 10, 2 );
 
 			// Add custom order var. Translated before the query reaches a data
 			// store, so it works whichever store is holding the orders; the
@@ -379,30 +383,110 @@ class Orders {
 	}
 
 
-	public function validate_cart_products_quantity( &$data, &$errors ) {
-		if ( 'yes' === $this->integration->get_option( 'stock_sync_allowed', 'no' ) && 'yes' === $this->integration->get_option( 'validate_checkout_stock', 'no' ) ) {
-			foreach ( WC()->cart->get_cart() as $cart_item ) {
-				$product_id  = $this->integration->get_wpml_original_post_id( $cart_item['data']->get_id() );
-				$product     = wc_get_product( $product_id );
+	/**
+	 * The classic checkout's validation.
+	 *
+	 * WooCommerce fires this with do_action( ..., $data, $errors ), so asking
+	 * for them by reference warned twice on every checkout submission under
+	 * PHP 8. Nothing is lost by taking them by value: $errors is a WP_Error
+	 * object, and adding to it is what this does.
+	 *
+	 * @param array     $data   Posted checkout data.
+	 * @param \WP_Error $errors Errors so far.
+	 *
+	 * @return void
+	 */
+	public function validate_cart_products_quantity( $data, $errors ) {
+		if ( ! $errors instanceof \WP_Error ) {
+			return;
+		}
 
-				if ( $product ) {
-					// Update quantities
-					$update_stock = $this->integration->manually_update_product_stock_data( $product );
+		foreach ( $this->cart_stock_errors( WC()->cart ) as $message ) {
+			$errors->add( 'out-of-stock', $message );
+		}
+	}
 
-					if ( $update_stock ) {
-						$product_quantities = $this->integration->get_product_from_lookup_table( $product->get_sku() );
-						$total_quantity     = ! empty( $product_quantities ) ? array_sum( wp_list_pluck( $product_quantities, 'stock_quantity' ) ) : 0;
 
-						$product->set_stock_quantity( $total_quantity );
-						$product->save();
+	/**
+	 * The same validation, for the block checkout.
+	 *
+	 * The Store API validates the cart itself and hands round a WP_Error to
+	 * fill in; anything added here stops the order being placed, the same way
+	 * the classic checkout's errors do.
+	 *
+	 * @param \WP_Error $errors Errors so far.
+	 * @param \WC_Cart  $cart   The cart being checked out.
+	 *
+	 * @return void
+	 */
+	public function validate_store_api_cart( $errors, $cart ) {
+		if ( ! $errors instanceof \WP_Error ) {
+			return;
+		}
 
-						if ( $total_quantity <= 0 && ! $product->is_on_backorder() ) {
-							$errors->add( 'out-of-stock', sprintf( __( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ), $product->get_name() ) );
-						}
-					}
-				}
+		foreach ( $this->cart_stock_errors( $cart ) as $message ) {
+			$errors->add( 'out-of-stock', $message );
+		}
+	}
+
+
+	/**
+	 * Ask Merit what is actually in stock for everything in this cart.
+	 *
+	 * Shared by both checkouts so they cannot drift apart: whatever one of them
+	 * refuses to sell, the other refuses too.
+	 *
+	 * @param \WC_Cart $cart Cart to check.
+	 *
+	 * @return array Messages, one per product that cannot be sold.
+	 */
+	private function cart_stock_errors( $cart ) {
+		$messages = [];
+
+		if ( 'yes' !== $this->integration->get_option( 'stock_sync_allowed', 'no' )
+			|| 'yes' !== $this->integration->get_option( 'validate_checkout_stock', 'no' ) ) {
+			return $messages;
+		}
+
+		if ( ! $cart instanceof \WC_Cart ) {
+			return $messages;
+		}
+
+		foreach ( $cart->get_cart() as $cart_item ) {
+			if ( empty( $cart_item['data'] ) || ! is_a( $cart_item['data'], 'WC_Product' ) ) {
+				continue;
+			}
+
+			$product_id = $this->integration->get_wpml_original_post_id( $cart_item['data']->get_id() );
+			$product    = wc_get_product( $product_id );
+
+			if ( ! $product ) {
+				continue;
+			}
+
+			// Update quantities
+			$update_stock = $this->integration->manually_update_product_stock_data( $product );
+
+			if ( ! $update_stock ) {
+				continue;
+			}
+
+			$product_quantities = $this->integration->get_product_from_lookup_table( $product->get_sku() );
+			$total_quantity     = ! empty( $product_quantities ) ? array_sum( wp_list_pluck( $product_quantities, 'stock_quantity' ) ) : 0;
+
+			$product->set_stock_quantity( $total_quantity );
+			$product->save();
+
+			if ( $total_quantity <= 0 && ! $product->is_on_backorder() ) {
+				$messages[] = sprintf(
+					/* translators: %s: product name. */
+					__( 'Sorry, "%s" is not in stock. Please edit your cart and try again. We apologize for any inconvenience caused.', 'woocommerce' ),
+					$product->get_name()
+				);
 			}
 		}
+
+		return $messages;
 	}
 
 

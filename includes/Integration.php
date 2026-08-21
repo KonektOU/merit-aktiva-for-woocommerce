@@ -50,6 +50,7 @@ class Integration extends \WC_Integration {
 		add_action( 'init', array( $this, 'init' ) );
 		add_action( 'admin_init', array( $this, 'admin_init' ) );
 		add_action( 'admin_notices', array( $this, 'api_failure_notice' ) );
+		add_action( 'current_screen', array( $this, 'check_api_on_settings_screen' ) );
 
 		if ( $this->have_api_credentials() ) {
 			if ( 'yes' === $this->get_option( 'stock_product_tab', 'no' ) ) {
@@ -342,6 +343,31 @@ class Integration extends \WC_Integration {
 
 
 	/**
+	 * Ask Merit something the moment this plugin's settings screen is opened.
+	 *
+	 * The screen makes API calls of its own while it renders, but notices are
+	 * printed before that, so a shop opening the screen to find out what is
+	 * wrong would have been told only on the next page load. One cheap read
+	 * before the notices, and the screen says what is true right now.
+	 *
+	 * @return void
+	 */
+	public function check_api_on_settings_screen() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reading which screen this is.
+		$section = isset( $_GET['section'] ) ? sanitize_key( wp_unslash( $_GET['section'] ) ) : '';
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- reading which screen this is.
+		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+
+		if ( 'integration' !== $tab || $this->id !== $section || ! $this->have_api_credentials() ) {
+			return;
+		}
+
+		$this->get_api()->get_banks();
+	}
+
+
+	/**
 	 * Say plainly, in the admin, that Merit is not answering.
 	 *
 	 * Not dismissible on purpose: while this is showing, nothing at all is
@@ -392,6 +418,11 @@ class Integration extends \WC_Integration {
 		global $wpdb;
 
 		$_product = wc_get_product( $product_id );
+
+		if ( ! $_product ) {
+			return false;
+		}
+
 		$products = [ $_product ];
 
 		if ( $_product->is_type( 'variable' ) ) {

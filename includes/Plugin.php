@@ -22,7 +22,7 @@ class Plugin extends Framework\SV_WC_Plugin {
 	protected static $instance;
 
 	/** plugin version number */
-	const VERSION = '1.3.1';
+	const VERSION = '1.3.2';
 
 	/** plugin id */
 	const PLUGIN_ID = 'wc-merit-aktiva';
@@ -71,9 +71,12 @@ class Plugin extends Framework\SV_WC_Plugin {
 					// order screens are hooked, so WooCommerce can be told
 					// this plugin does not mind where orders are kept.
 					'hpos'   => true,
+					// Both blocks are hooked: the stock check runs through the
+					// Store API as well as the classic checkout, and nothing
+					// else this plugin does touches how either is rendered.
 					'blocks' => array(
-						'cart'     => false,
-						'checkout' => false,
+						'cart'     => true,
+						'checkout' => true,
 					),
 				),
 			)
